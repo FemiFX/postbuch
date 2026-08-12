@@ -1,0 +1,76 @@
+{% set is_incoming = channel_path == "/channels/paper-incoming" %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">{% if is_incoming %}Papierpost Eingang{% else %}Papierpost Ausgang{% endif %}</h1>
+    <p class="page-subtitle">
+      {% if is_incoming %}
+      Gescannt eingegangene Papierpost aus dem Eingangspostfach prüfen und registrieren.
+      {% else %}
+      Gescannt erfasste ausgehende Papierpost prüfen und im Register abschließen.
+      {% endif %}
+    </p>
+  </div>
+  {% if current_user.role in ["editor", "admin", "super_admin"] %}
+  <a class="btn" href="/register/new">{% if is_incoming %}Eintrag erfassen{% else %}Ausgang erfassen{% endif %}</a>
+  {% endif %}
+</div>
+
+<!-- Status tabs -->
+<div class="flex gap-1 mb-5 border-b border-line">
+  {% set statuses = [("", "Alle"), ("neu", "Neu"), ("in_bearbeitung", "In Bearbeitung"), ("erledigt", "Abgeschlossen")] %}
+  {% for val, label in statuses %}
+  <a href="{{ channel_path }}{% if val %}?status_filter={{ val }}{% endif %}"
+     class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px
+            {% if status_filter == val %}border-brand text-brand{% else %}border-transparent text-ink2 hover:text-ink hover:border-line-d{% endif %}">
+    {{ label }}
+  </a>
+  {% endfor %}
+</div>
+
+<!-- Table -->
+<div class="card mb-0">
+  <table class="w-full border-collapse text-sm">
+    <thead>
+      <tr class="border-b border-line">
+        <th class="table-th">Datum</th>
+        <th class="table-th">Titel</th>
+        <th class="table-th">Kategorie</th>
+        <th class="table-th">Status</th>
+        <th class="table-th">Quelle</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      {% set row_url = channel_path ~ "?selected_id=" ~ item.id ~ ("&status_filter=" ~ status_filter if status_filter else "") %}
+      <tr class="table-row cursor-pointer" onclick="window.location='{{ row_url }}'">
+        <td class="table-td text-muted whitespace-nowrap text-xs">{{ item.entry_date }}</td>
+        <td class="table-td">
+          <a href="{{ row_url }}" class="font-medium text-ink hover:text-brand">{{ item.title }}</a>
+        </td>
+        <td class="table-td text-ink2 text-xs">{{ item.category.name if item.category else "–" }}</td>
+        <td class="table-td">
+          {% if item.status == "neu" %}
+          <span class="chip chip-neu">Neu</span>
+          {% elif item.status == "in_bearbeitung" %}
+          <span class="chip chip-progress">In Bearbeitung</span>
+          {% elif item.status == "erledigt" %}
+          <span class="chip chip-done">Abgeschlossen</span>
+          {% else %}
+          <span class="chip chip-neutral">{{ item.status }}</span>
+          {% endif %}
+        </td>
+        <td class="table-td text-muted text-xs">{{ item.source_mailbox or item.source_type or "–" }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="px-4 py-12 text-center">
+          <div class="flex flex-col items-center gap-2">
+            <svg class="text-muted" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+            <p class="text-sm text-muted m-0">{{ channel_empty_label }}</p>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

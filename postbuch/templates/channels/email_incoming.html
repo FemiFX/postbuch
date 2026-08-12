@@ -1,0 +1,2604 @@
+{% extends "base.html" %}
+
+{% block wrapper_class %}flex flex-col h-screen{% endblock %}
+{% block main_class %}flex-1 min-h-0 overflow-hidden flex{% endblock %}
+
+{% block topbar_left %}
+<div class="min-w-0">
+  <h1 class="text-sm font-semibold text-ink leading-tight m-0">E-Mail Eingang</h1>
+</div>
+{% endblock %}
+
+{% block content %}
+<meta name="csrf-token" content="{{ csrf_token }}">
+{% set triage_reply_enabled = triage_reply_enabled|default(false) %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+
+  .email-triage-shell {
+    --triage-accent: #4E6B57;
+    --triage-accent-soft: #EAF1EB;
+    --triage-line: #e2e8f0;
+    --triage-line-soft: #e8eaed;
+    --triage-muted: #94a3b8;
+    --triage-ink: #0f172a;
+    --triage-ink-2: #64748b;
+    font-family: 'DM Sans', Inter, system-ui, sans-serif;
+    color: var(--triage-ink);
+  }
+  .queue-row {
+    transition: background 0.15s ease;
+    border-left: 2px solid transparent;
+  }
+  .queue-row:hover { background: #eef0f3; }
+  .queue-row.is-selected {
+    background: #fff;
+    border-left-color: var(--triage-accent);
+  }
+  .queue-row.is-selected .row-subject { color: #1e293b; }
+  .queue-row .row-subject {
+    color: #1e293b;
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    line-height: 1.25;
+  }
+  .queue-row .row-sender,
+  .queue-row .row-time,
+  .queue-row .row-snippet {
+    font-size: 11.5px !important;
+    font-weight: 400 !important;
+  }
+  .queue-row .row-sender { color: #64748b; }
+  .queue-row .row-time,
+  .queue-row .row-snippet { color: #94a3b8; }
+  .queue-row .queue-dot {
+    width: 7px !important;
+    height: 7px !important;
+  }
+  .triage-tool-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 34px !important;
+    padding: 0 11px !important;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #374151;
+    font-size: 12px !important;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    font-family: inherit;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+  .triage-tool-btn:hover {
+    border-color: var(--triage-accent);
+    color: var(--triage-accent);
+    background: #FBFBF9;
+  }
+  .triage-tool-btn.primary {
+    border-color: var(--triage-accent);
+    background: var(--triage-accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .triage-tool-btn.primary:hover {
+    background: #415A49;
+    color: #fff;
+  }
+  .triage-tool-btn.accent {
+    border-color: var(--triage-accent);
+    color: var(--triage-accent);
+  }
+  .triage-tool-btn.w-9 {
+    width: 34px !important;
+    padding: 0 !important;
+  }
+  .triage-field {
+    box-sizing: border-box;
+    height: 33px !important;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #374151;
+    font-size: 12.5px !important;
+    font-weight: 400;
+    line-height: 1;
+    outline: none;
+    font-family: inherit;
+  }
+  .triage-field:focus {
+    border-color: var(--triage-accent);
+    box-shadow: 0 0 0 2px rgba(13,148,136,0.18);
+  }
+  .triage-meta-label {
+    display: block;
+    margin-bottom: 7px;
+    color: var(--triage-muted);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+  .triage-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    border-color: color-mix(in srgb, currentColor 18%, transparent);
+    background: #f8fafc;
+    color: #64748b;
+    padding: 3px 9px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .triage-status-badge::before {
+    content: "";
+    width: 0.38rem;
+    height: 0.38rem;
+    border-radius: 999px;
+    background: currentColor;
+  }
+  .priority-pill { font-size: 10px; font-weight: 600; letter-spacing: 0; text-transform:none; border-radius: 999px; padding: 2px 7px; border: 1px solid transparent; }
+  .priority-high { background:#FFF4E6; color:#B8661F; border-color:rgba(184,102,31,0.25); }
+  .priority-low { background:#EAF3FF; color:#2F5FB3; border-color:rgba(47,95,179,0.25); }
+  .priority-urgent { background:#FDEBEC; color:#C54040; border-color:rgba(197,64,64,0.25); }
+  .queue-chip {
+    margin-left: 0;
+    min-width: 1.4em;
+    border-radius: 9999px;
+    padding: 2px 7px;
+    text-align: center;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    background: #f0f9ff;
+    color: #0369a1;
+    border: 1px solid rgba(3,105,161,0.16);
+  }
+  .assignee-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    padding: 2px 7px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1px solid rgba(21,128,61,0.16);
+  }
+  .email-triage-shell .chip {
+    gap: 5px;
+    padding: 2px 7px !important;
+    border-radius: 999px;
+    font-size: 10px !important;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .email-triage-shell .chip::before {
+    content: "";
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: currentColor;
+  }
+  .email-triage-shell .chip-neutral::before,
+  .email-triage-shell [data-thread-chip]::before {
+    display: none;
+  }
+  .email-triage-shell .chip-done {
+    background: #f0fdf4;
+    color: #059669;
+    border-color: rgba(5,150,105,0.14);
+  }
+  .email-triage-shell .chip-progress,
+  .email-triage-shell .chip-pending {
+    background: #fffbeb;
+    color: #d97706;
+    border-color: rgba(217,119,6,0.16);
+  }
+  .email-triage-shell .chip-neu {
+    background: #eff6ff;
+    color: #3b82f6;
+    border-color: rgba(59,130,246,0.14);
+  }
+  .email-triage-shell .chip-neutral {
+    background: #f8fafc;
+    color: #64748b;
+    border-color: #e2e8f0;
+  }
+  .email-triage-shell .queue-tab-item {
+    padding: 10px 10px 8px !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    color: #94a3b8;
+  }
+  .email-triage-shell .queue-tab-item.is-active,
+  .email-triage-shell .queue-tab-item[aria-current="true"] {
+    color: #0f172a;
+    font-weight: 700 !important;
+    border-bottom-color: #4E6B57 !important;
+  }
+  .triage-actionbar {
+    height: 58px;
+    padding: 10px 20px;
+  }
+  .triage-tabbar {
+    height: 38px;
+    padding: 0 20px;
+  }
+  .email-triage-shell .workspace-tab {
+    padding: 9px 14px 7px !important;
+    font-size: 12.5px !important;
+    font-weight: 400 !important;
+    color: #94a3b8;
+  }
+  .email-triage-shell .workspace-tab.is-active {
+    color: #0f172a;
+    font-weight: 600 !important;
+    border-bottom-color: #4E6B57 !important;
+  }
+  #details-panel {
+    background: #fafafa;
+    width: 220px;
+    padding: 20px 16px;
+  }
+  #details-panel .triage-field {
+    height: 34px !important;
+    border-radius: 6px;
+  }
+  .email-triage-shell .assign-option,
+  .email-triage-shell .category-assign-option,
+  .email-triage-shell .more-action {
+    font-size: 12.5px !important;
+    font-weight: 400;
+    color: #1e293b;
+    padding: 8px 14px !important;
+  }
+  .email-triage-shell .assign-option {
+    display: block;
+    min-height: 40px;
+    line-height: 1.25;
+  }
+  .email-triage-shell .assign-option-name {
+    display: block;
+    color: #1e293b;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  .email-triage-shell .assign-option-email {
+    display: block;
+    color: #94a3b8;
+    font-size: 11.5px;
+    font-weight: 400;
+    line-height: 1.25;
+    margin-top: 2px;
+    overflow-wrap: anywhere;
+  }
+  .email-triage-shell .assign-option:hover,
+  .email-triage-shell .category-assign-option:hover,
+  .email-triage-shell .more-action:hover {
+    background: #f8fafc;
+    color: #0f172a;
+  }
+  .email-triage-shell #assign-menu,
+  .email-triage-shell #category-assign-menu,
+  .email-triage-shell #more-menu {
+    border-color: #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  }
+  .email-triage-shell #assign-menu {
+    min-width: 230px;
+    max-width: 280px;
+    padding: 5px 0;
+  }
+  .workspace-panel[data-panel="overview"] > .overview-shell {
+    height: 100%;
+  }
+  .workspace-panel[data-panel="overview"] {
+    height: 100% !important;
+  }
+  .workspace-panel[data-panel="overview"] .overview-shell {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .message-header-rule {
+    height: 1px;
+    background: #e8eaed;
+    margin: 0 0 4px;
+    flex-shrink: 0;
+  }
+  .timeline-rail {
+    max-width: 520px;
+    padding: 4px 0;
+  }
+  .timeline-event {
+    display: flex;
+    gap: 12px;
+    min-height: 44px;
+  }
+  .timeline-marker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .timeline-dot-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 1px solid #bbf7d0;
+    background: #f0fdf4;
+    color: #059669;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .timeline-line {
+    width: 1px;
+    flex: 1;
+    min-height: 16px;
+    background: #e2e8f0;
+    margin: 4px 0;
+  }
+  .timeline-title {
+    margin: 0;
+    color: #1e293b;
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1.35;
+  }
+  .timeline-meta {
+    margin: 2px 0 0;
+    color: #94a3b8;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .overview-shell.reply-mode #message-preview-card {
+    display: none !important;
+  }
+  .overview-shell.reply-mode #reply-compose {
+    display: flex !important;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  #message-preview-card {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+  #message-frame,
+  #message-text {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  #reply-compose-body-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+  }
+</style>
+
+<div class="email-triage-shell relative flex h-full min-h-0 w-full overflow-hidden bg-paper">
+  <aside class="flex flex-col flex-shrink-0 h-full min-h-0" style="width:300px;background:#f5f6f8;border-right:1px solid #e2e8f0;">
+    <div id="queue-header-controls" class="px-3 py-3 flex flex-col gap-2" style="border-bottom:1px solid #e8eaed;background:#f5f6f8;">
+      <form id="queue-search-form-inline" method="get" action="/channels/email-incoming" class="relative w-full">
+        <input type="hidden" name="status_scope" value="{{ filters.status_scope }}">
+        <input type="hidden" name="assigned_filter" value="{{ filters.assigned_filter }}">
+        {% if filters.category_id %}<input type="hidden" name="category_id" value="{{ filters.category_id }}">{% endif %}
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input name="q" value="{{ filters.q }}" type="search" placeholder="Betreff, Absender, Inhalt..." class="triage-field w-full pl-8 pr-3">
+      </form>
+      <div class="hidden gap-2">
+        <button id="btn-category-refresh" type="button" class="triage-tool-btn h-8 flex-1 px-2 text-xs" title="Kategorien neu laden">↻</button>
+        <button id="btn-category-add" type="button" class="triage-tool-btn h-8 flex-1 px-2 text-xs" title="Kategorie anlegen">Neue Kategorie</button>
+      </div>
+    </div>
+
+    <form id="queue-control-form" method="get" action="/channels/email-incoming"
+          class="px-3 py-0 flex flex-col gap-0"
+          style="border-bottom:1px solid #e2e8f0;background:#f5f6f8;"
+          onsubmit="(function(f){Array.from(f.elements).forEach(function(el){if(el.name&&el.value==='')el.disabled=true;});return true;})(this)">
+      <input type="hidden" name="status_scope" value="{{ filters.status_scope }}">
+      {% if filters.q %}<input type="hidden" name="q" value="{{ filters.q }}">{% endif %}
+
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center gap-2 mt-2">
+          <select id="category-filter-select" name="category_id" class="triage-field px-3 min-w-0 flex-1">
+            <option value="">Alle Kategorien</option>
+            {% for category in categories %}
+            <option value="{{ category.id }}" {% if filters.category_id == category.id %}selected{% endif %}>{{ category.name }}</option>
+            {% endfor %}
+          </select>
+          <select id="assigned-filter-select" name="assigned_filter" class="triage-field px-3 min-w-0 flex-1">
+            <option value="all" {% if filters.assigned_filter == 'all' %}selected{% endif %}>Alle Bearbeiter</option>
+            <option value="unassigned" {% if filters.assigned_filter == 'unassigned' %}selected{% endif %}>Nicht zugewiesen</option>
+            {% for user in assignees %}
+            <option value="user:{{ user.id }}" {% if filters.assigned_filter == ('user:' ~ user.id) %}selected{% endif %}>{{ user.display_name }} ({{ assigned_counts.get('user:' ~ user.id, 0) }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="flex items-center gap-0 min-w-0 mt-2">
+          {% for scope, label in [("open", "Offen"), ("all", "Alle"), ("closed", "Geschlossen")] %}
+          <a
+            href="/channels/email-incoming?status_scope={{ scope }}&assigned_filter={{ filters.assigned_filter }}{% if filters.q %}&q={{ filters.q|replace(' ', '%20') }}{% endif %}{% if filters.category_id %}&category_id={{ filters.category_id }}{% endif %}"
+            class="queue-tab-item flex-1 justify-center inline-flex items-center gap-1 transition-colors whitespace-nowrap border-b-2
+                   {% if filters.status_scope == scope %}border-brand text-ink{% else %}border-transparent text-muted hover:text-ink{% endif %}"
+            {% if filters.status_scope == scope %}aria-current="true"{% endif %}
+          >{{ label }} <span data-scope-count="{{ scope }}" class="text-[0.68rem] rounded-full px-1.5 py-0 {% if filters.status_scope == scope %}bg-brand text-white{% else %}bg-line text-muted{% endif %}">{{ status_counts.get(scope, 0) }}</span></a>
+          {% endfor %}
+        </div>
+      </div>
+
+    </form>
+
+    {% if filters.q or filters.category_id or filters.status_scope != "open" or filters.assigned_filter != "all" %}
+    {% set active_category = namespace(name='') %}
+    {% for cat in categories %}{% if cat.id == filters.category_id %}{% set active_category.name = cat.name %}{% endif %}{% endfor %}
+    {% set active_assignee = namespace(name='') %}
+    {% for user in assignees %}
+      {% if filters.assigned_user_id and filters.assigned_user_id == user.id %}{% set active_assignee.name = user.display_name %}{% endif %}
+    {% endfor %}
+    <div class="px-3 py-1.5 border-b border-line flex flex-wrap gap-1 items-center" style="background:#EAF1EB66;">
+      {% if filters.q %}
+      <a href="/channels/email-incoming?status_scope={{ filters.status_scope }}&assigned_filter={{ filters.assigned_filter }}{% if filters.category_id %}&category_id={{ filters.category_id }}{% endif %}"
+         class="inline-flex items-center gap-1 text-[0.66rem] font-medium text-ink2 bg-paper border border-line-d px-2 py-0.5 rounded-full hover:text-err hover:border-err/30 transition-colors">
+        „{{ filters.q }}" <span class="text-muted">✕</span>
+      </a>
+      {% endif %}
+      {% if filters.status_scope != "open" %}
+      <a href="/channels/email-incoming?status_scope=open&assigned_filter={{ filters.assigned_filter }}{% if filters.q %}&q={{ filters.q|replace(' ','%20') }}{% endif %}{% if filters.category_id %}&category_id={{ filters.category_id }}{% endif %}"
+         class="inline-flex items-center gap-1 text-[0.66rem] font-medium text-ink2 bg-paper border border-line-d px-2 py-0.5 rounded-full hover:text-err hover:border-err/30 transition-colors">
+        {{ "Geschlossen" if filters.status_scope == "closed" else "Alle" }} <span class="text-muted">✕</span>
+      </a>
+      {% endif %}
+      {% if filters.assigned_filter == 'unassigned' %}
+      <a href="/channels/email-incoming?status_scope={{ filters.status_scope }}&assigned_filter=all{% if filters.q %}&q={{ filters.q|replace(' ','%20') }}{% endif %}{% if filters.category_id %}&category_id={{ filters.category_id }}{% endif %}"
+         class="inline-flex items-center gap-1 text-[0.66rem] font-medium text-ink2 bg-paper border border-line-d px-2 py-0.5 rounded-full hover:text-err hover:border-err/30 transition-colors">Nicht zugewiesen <span class="text-muted">✕</span></a>
+      {% elif filters.assigned_filter.startswith('user:') %}
+      <a href="/channels/email-incoming?status_scope={{ filters.status_scope }}&assigned_filter=all{% if filters.q %}&q={{ filters.q|replace(' ','%20') }}{% endif %}{% if filters.category_id %}&category_id={{ filters.category_id }}{% endif %}"
+         class="inline-flex items-center gap-1 text-[0.66rem] font-medium text-ink2 bg-paper border border-line-d px-2 py-0.5 rounded-full hover:text-err hover:border-err/30 transition-colors">{{ active_assignee.name or 'Benutzer' }} <span class="text-muted">✕</span></a>
+      {% endif %}
+      {% if filters.category_id and active_category.name %}
+      <a href="/channels/email-incoming?status_scope={{ filters.status_scope }}&assigned_filter={{ filters.assigned_filter }}{% if filters.q %}&q={{ filters.q|replace(' ','%20') }}{% endif %}"
+         class="inline-flex items-center gap-1 text-[0.66rem] font-medium text-ink2 bg-paper border border-line-d px-2 py-0.5 rounded-full hover:text-err hover:border-err/30 transition-colors">
+        {{ active_category.name }} <span class="text-muted">✕</span>
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <div id="queue-list" class="flex-1 overflow-y-auto" style="background:#f5f6f8;">
+      {% if items %}
+      {% for item in items %}
+      {% set sender_name = (item.sender or 'Unbekannt').split('<')[0].strip().strip('"\'') %}
+      {% set category_ns = namespace(name='') %}
+      {% set assignee_ns = namespace(name='') %}
+      {% for category in categories %}
+        {% if item.category_id == category.id %}{% set category_ns.name = category.name %}{% endif %}
+      {% endfor %}
+      {% for user in assignees %}
+        {% if item.assigned_to_user_id == user.id %}{% set assignee_ns.name = user.display_name %}{% endif %}
+      {% endfor %}
+      {% set dot_color = {
+        'neu': '#3b82f6',
+        'in_bearbeitung': '#d97706',
+        'wartet_aktion': '#7c3aed',
+        'weitergeleitet': '#0891b2',
+        'beantwortet': '#059669',
+        'geschlossen': '#64748b',
+        'spam': '#be123c',
+        'fehler': '#dc2626'
+      }.get(item.status, '#94a3b8') %}
+      {% set status_meta = {
+        'neu': {'label': 'Neu', 'chip': 'chip-neu'},
+        'in_bearbeitung': {'label': 'In Bearbeitung', 'chip': 'chip-progress'},
+        'wartet_aktion': {'label': 'Wartet auf Antwort', 'chip': 'chip-pending'},
+        'weitergeleitet': {'label': 'Weitergeleitet', 'chip': 'chip-done'},
+        'beantwortet': {'label': 'Beantwortet', 'chip': 'chip-done'},
+        'geschlossen': {'label': 'Abgeschlossen', 'chip': 'chip-neutral'},
+        'spam': {'label': 'Spam', 'chip': 'chip-duplicate'},
+        'fehler': {'label': 'Fehler', 'chip': 'chip-duplicate'}
+      } %}
+      {% set status_chip = status_meta.get(item.status, {'label': item.status, 'chip': 'chip-neutral'}) %}
+      <button
+        type="button"
+        class="queue-row w-full text-left px-3 border-b border-line bg-transparent transition-colors {% if selected_id == item.id %}is-selected{% endif %}"
+        style="padding-top:11px;padding-bottom:11px;border-bottom-color:#e8eaed;"
+        data-id="{{ item.id }}"
+        data-status="{{ item.status }}"
+        data-category-id="{{ item.category_id if item.category_id is not none else '' }}"
+        data-assignee-id="{{ item.assigned_to_user_id if item.assigned_to_user_id is not none else '' }}"
+        data-case-id="{{ item.case_id if item.case_id is not none else '' }}"
+      >
+        <div class="flex items-start gap-2.5">
+          <span class="queue-dot mt-[5px] inline-block rounded-full flex-shrink-0"
+                style="width:7px;height:7px;background:{{ dot_color }};"></span>
+          <div class="min-w-0 flex-1">
+            <!-- Subject: primary content -->
+            <p class="row-subject text-[0.82rem] font-semibold text-ink m-0 truncate leading-snug">{{ item.subject or '(Kein Betreff)' }}</p>
+            <!-- Sender + date: metadata -->
+            <div class="flex items-center justify-between gap-2 mt-0.5">
+              <p class="row-sender text-ink2 m-0 truncate">{{ sender_name or 'Unbekannt' }}</p>
+              <span class="row-time text-muted flex-shrink-0">
+                {% if item.received_at %}
+                {% if item.received_at.date() == today %}{{ item.received_at.strftime('%H:%M') }}{% else %}{{ item.received_at.strftime('%d.%m') }}{% endif %}
+                {% else %}–{% endif %}
+              </span>
+            </div>
+            <!-- Preview: tertiary -->
+            <p class="row-snippet text-[0.71rem] text-muted m-0 mt-1 truncate leading-snug">{{ (item.body_text or '') | truncate(80, true, '') }}</p>
+            <!-- Chips: tags/metadata -->
+            <div class="row-chips mt-1.5 flex items-center flex-wrap gap-1">
+              <span class="chip {{ status_chip.chip }} text-[0.63rem] px-1.5 py-0">{{ status_chip.label }}</span>
+              {% if assignee_ns.name %}
+              <span class="chip chip-neutral text-[0.63rem] px-1.5 py-0">Zugewiesen</span>
+              {% endif %}
+              {% set prio = priority_meta_by_category_id.get(item.category_id) if item.category_id is not none else none %}
+              {% if prio %}
+              <span class="priority-pill {% if prio.label == 'URGENT' %}priority-urgent{% elif prio.label == 'HIGH' %}priority-high{% else %}priority-low{% endif %}">{{ prio.label }}</span>
+              {% endif %}
+              {% if category_ns.name %}
+              <span class="queue-chip">{{ category_ns.name }}</span>
+              {% endif %}
+              {% if assignee_ns.name %}
+              <span class="assignee-badge">{{ assignee_ns.name }}</span>
+              {% endif %}
+              {% if item.case_id %}
+              <span class="chip chip-neutral text-[0.63rem] px-1.5 py-0" data-thread-chip>Fall</span>
+              {% endif %}
+              {% if item.has_attachments %}
+              <span class="inline-flex items-center gap-0.5 text-[0.63rem] text-muted">
+                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                Anlage
+              </span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </button>
+      {% endfor %}
+      {% else %}
+      <div class="px-6 py-14 text-center">
+        <p class="text-sm font-medium text-ink m-0">Keine E-Mails gefunden.</p>
+        <p class="text-xs text-muted m-0 mt-1">Passe die Filter an oder importiere neue Nachrichten.</p>
+      </div>
+      {% endif %}
+    </div>
+  </aside>
+  <section class="flex-1 min-w-0 bg-paper flex flex-col overflow-hidden relative">
+    <div id="workspace-empty" class="flex-1 flex flex-col items-center justify-center px-8 text-center gap-3">
+      <div class="w-14 h-14 rounded-2xl flex items-center justify-center" style="background:#EAF1EB;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4E6B57" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+      </div>
+      <div>
+        <p class="text-base font-semibold text-ink m-0">Wähle eine Nachricht aus der Queue</p>
+        <p class="text-sm text-muted m-0 mt-1">Die Bearbeitungsansicht erscheint hier mit Tabs für Überblick, Nachricht, Verlauf und Notizen.</p>
+      </div>
+    </div>
+
+    <div id="workspace" class="hidden flex-1 min-h-0 flex flex-col">
+
+      <div class="hidden px-5 pt-3 pb-2.5 border-b border-line flex-shrink-0 bg-paper">
+        <h2
+          id="ws-subject"
+          class="text-[1.18rem] leading-[1.25] font-semibold text-ink m-0"
+          style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;"
+        ></h2>
+        <p class="text-[0.78rem] text-muted m-0 mt-1.5 flex items-center gap-1.5 min-w-0">
+          <span id="ws-from-name" class="font-medium text-ink2 truncate max-w-[240px]"></span>
+          <span id="ws-from-email-wrap" class="hidden items-center gap-1.5 min-w-0">
+            <span class="opacity-30">·</span>
+            <span id="ws-from-email" class="truncate max-w-[240px]" title=""></span>
+          </span>
+          <span class="opacity-30">·</span>
+          <span id="ws-received"></span>
+          <span id="ws-case-wrap" class="hidden items-center gap-1.5"><span class="opacity-30">·</span><span id="ws-case"></span></span>
+        </p>
+      </div>
+
+      <div class="triage-actionbar border-b border-line flex-shrink-0 bg-paper flex items-center gap-3">
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <button id="btn-timeline" class="triage-tool-btn" title="Verlauf">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            Verlauf
+          </button>
+          <div class="relative" id="assign-menu-wrap">
+            <button id="btn-assign" class="triage-tool-btn">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/></svg>
+              Zuweisen
+            </button>
+            <div id="assign-menu" class="hidden absolute left-0 top-full mt-1 rounded-xl border border-line shadow-lg bg-paper py-1 z-20">
+              <button type="button" class="assign-option w-full text-left px-3 py-2 text-xs text-ink2 hover:bg-app hover:text-ink" data-user-id="">
+                <span class="assign-option-name">Nicht zugewiesen</span>
+              </button>
+              {% for user in assignees %}
+              <button type="button" class="assign-option w-full text-left px-3 py-2 text-xs text-ink2 hover:bg-app hover:text-ink" data-user-id="{{ user.id }}">
+                <span class="assign-option-name">{{ user.display_name }}</span>
+                <span class="assign-option-email">{{ user.email }}</span>
+              </button>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="relative" id="category-assign-wrap">
+            <button id="btn-category-assign" class="triage-tool-btn">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3H4a1 1 0 0 0-1 1v7l10.59 9.59a2 2 0 0 0 2.82 0l4.18-4.18a2 2 0 0 0 0-2.82Z"/><path d="M7 7h.01"/></svg>
+              <span id="btn-category-assign-label">Kategorie</span>
+            </button>
+            <div id="category-assign-menu" class="hidden absolute left-0 top-full mt-1 rounded-xl border border-line shadow-lg bg-paper py-1 min-w-[210px] z-20">
+              <button type="button" class="category-assign-option w-full text-left px-3 py-2 text-xs text-ink2 hover:bg-app hover:text-ink" data-category-id="">Keine Kategorie</button>
+              <div id="category-assign-options"></div>
+              <div class="border-t border-line mt-1 pt-1 px-2 flex items-center gap-1">
+                <button type="button" id="category-assign-refresh" class="btn-ghost h-7 w-7 p-0 text-[0.8rem]" title="Kategorien neu laden">↻</button>
+                <button type="button" id="category-assign-add" class="btn-ghost h-7 w-7 p-0 text-[0.95rem]" title="Kategorie anlegen">+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex-1"></div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <button id="btn-forward" class="triage-tool-btn accent">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>
+            Weiterleiten
+          </button>
+          {% if triage_reply_enabled %}
+          <button id="btn-reply" class="triage-tool-btn accent">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+            Antworten
+          </button>
+          {% endif %}
+          <button id="btn-close" class="triage-tool-btn primary">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Abschließen
+          </button>
+          <div class="relative" id="more-menu-wrap">
+            <button id="btn-more" class="triage-tool-btn w-9 px-0">⋮</button>
+            <div id="more-menu" class="hidden absolute right-0 top-full mt-1 rounded-xl border border-line shadow-lg bg-paper py-1 min-w-[200px] z-20">
+              <button type="button" data-more-action="duplicate" class="more-action w-full text-left px-3 py-2 text-xs text-ink2 hover:bg-app hover:text-ink">Als Duplikat markieren</button>
+              <button type="button" data-more-action="spam" class="more-action w-full text-left px-3 py-2 text-xs text-ink2 hover:bg-app hover:text-ink">Als Spam markieren</button>
+              <button type="button" data-more-action="merge" class="more-action w-full text-left px-3 py-2 text-xs text-ink2 hover:bg-app hover:text-ink">Fälle zusammenführen</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="triage-tabbar border-b border-line flex-shrink-0 bg-paper">
+        <div class="flex items-center gap-1">
+          <button class="workspace-tab is-active px-2.5 py-2 text-[0.8125rem] font-medium border-b-2" data-tab="overview">Nachricht</button>
+          <button class="workspace-tab px-2.5 py-2 text-[0.8125rem] font-medium border-b-2 border-transparent text-ink2 hover:text-ink hover:border-line" data-tab="timeline">Verlauf</button>
+          <button class="workspace-tab px-2.5 py-2 text-[0.8125rem] font-medium border-b-2 border-transparent text-ink2 hover:text-ink hover:border-line" data-tab="notes">Notizen</button>
+        </div>
+      </div>
+
+      <div class="flex-1 min-h-0 flex bg-paper overflow-hidden">
+        <div class="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <section class="workspace-panel flex-1 min-h-0 overflow-hidden" data-panel="overview" style="display:flex;flex-direction:column;">
+          <div class="overview-shell w-full px-7 pt-4 pb-6 flex flex-col gap-4 flex-1 min-h-0">
+            <div class="flex items-center gap-3 hidden">
+              <div class="flex items-center gap-2">
+                <span id="ws-priority" class="priority-pill priority-high hidden">HIGH</span>
+              </div>
+            </div>
+
+            <h2 id="ws-subject-big" class="text-[20px] leading-tight font-bold text-[#0f172a] m-0"></h2>
+
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex items-center gap-3 min-w-0">
+                <div id="ws-avatar" class="w-10 h-10 rounded-full border border-line flex items-center justify-center text-sm font-semibold" style="background:#EAF1EB;color:#4E6B57;">–</div>
+                <div class="min-w-0">
+                  <p id="ws-from-name-big" class="text-[13.5px] font-semibold text-[#1e293b] m-0 truncate"></p>
+                  <p id="ws-from-email-big" class="text-[12px] text-[#94a3b8] m-0 truncate"></p>
+                </div>
+              </div>
+              <div id="ws-received-inline" class="text-[11.5px] text-[#94a3b8] flex-shrink-0">–</div>
+            </div>
+
+            <div class="message-header-rule"></div>
+
+            <div id="message-attachments-card" style="display:none;" class="py-2 border-t border-b border-line bg-paper">
+              <p class="text-[0.68rem] font-semibold uppercase tracking-wider text-muted mb-1.5 px-1">Anhänge</p>
+              <div id="message-attachments" class="flex flex-wrap gap-1.5 px-1"></div>
+            </div>
+
+            {% if triage_reply_enabled %}
+            <div id="reply-compose" class="hidden rounded-xl border border-line bg-paper overflow-hidden flex-1 min-h-0 flex flex-col">
+              <div class="px-4 py-3 border-b border-line text-sm font-medium text-ink flex items-center justify-between gap-2">
+                <span>Antwort verfassen</span>
+                <button id="reply-compose-cancel" class="btn-ghost h-7 px-2.5 text-xs">Abbrechen</button>
+              </div>
+              <div id="reply-compose-body-wrap" class="p-4 flex-1 min-h-0 flex flex-col gap-3 overflow-auto">
+                <textarea id="reply-compose-body" class="w-full text-sm text-ink2 border-0 outline-none resize-none flex-1 min-h-[160px]" placeholder="Antwort eingeben …"></textarea>
+                <div id="reply-compose-original" class="pt-2 border-t border-line flex-shrink-0">
+                  <p id="reply-compose-quote-header" class="m-0 mb-2 text-xs text-muted"></p>
+                  <iframe id="reply-compose-original-frame" class="w-full h-52 hidden bg-paper rounded-md border border-line" style="border:0;" sandbox="allow-same-origin" title="Originalnachricht (HTML)"></iframe>
+                  <pre id="reply-compose-original-text" class="hidden m-0 p-3 text-xs text-ink2 max-h-52 overflow-auto rounded-md border border-line bg-paper" style="white-space:pre-wrap;word-break:break-word;"></pre>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <button id="reply-compose-note" class="btn-ghost h-8 px-3 text-xs">Interne Notiz</button>
+                  <button id="reply-compose-send" class="btn h-9 px-4 text-sm">Antwort senden</button>
+                </div>
+              </div>
+            </div>
+            {% endif %}
+
+            <div id="message-preview-card" class="bg-paper flex-1 min-h-0 overflow-hidden">
+              <iframe id="message-frame" class="w-full h-full" style="border:0;" sandbox="allow-same-origin" title="E-Mail Inhalt"></iframe>
+              <pre id="message-text" class="hidden m-0 p-5 text-sm text-ink2 h-full overflow-auto" style="white-space:pre-wrap;word-break:break-word;"></pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="workspace-panel px-7 py-6 overflow-auto" data-panel="timeline" style="display:none;">
+          <div class="timeline-rail">
+            <p class="text-[13px] font-semibold text-[#0f172a] m-0 mb-5">Bearbeitungsverlauf</p>
+            <div id="timeline-list"></div>
+          </div>
+        </section>
+
+        <section class="workspace-panel p-6 overflow-auto" data-panel="notes" style="display:none;">
+          <div class="card max-w-4xl">
+            <div class="card-header">
+              <p class="text-sm font-semibold text-ink m-0">Interne Notiz</p>
+            </div>
+            <div class="card-body">
+              <textarea id="notes-input" class="form-textarea w-full" style="min-height:140px;" placeholder="Notiz zur Bearbeitung …"></textarea>
+              <div class="mt-3 flex items-center gap-2">
+                <button id="notes-save" class="btn h-9 px-3 text-sm">Speichern</button>
+                <span class="text-xs text-muted">Notizen sind intern und enthalten keine Kategorie-/Zuweisungsdaten.</span>
+              </div>
+            </div>
+            <div class="border-t border-line">
+              <div class="px-4 py-3 flex items-center justify-between">
+                <p class="text-xs font-semibold text-muted uppercase tracking-wide m-0">Verlauf</p>
+                <span id="notes-count" class="text-[0.68rem] rounded-full px-1.5 py-0 bg-line text-muted">0</span>
+              </div>
+              <ul id="notes-list" class="plain-list px-4 pb-4 m-0">
+                <li id="notes-empty" class="text-xs text-muted py-3">Noch keine Notizen.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+        </div>
+
+        <aside id="details-panel" class="flex-shrink-0 border-l border-line overflow-y-auto">
+          <p class="triage-meta-label text-[0.72rem] mb-5">Details</p>
+          <div class="mb-4">
+            <span class="triage-meta-label">Status</span>
+            <span id="details-status-badge" class="triage-status-badge">–</span>
+          </div>
+          <div class="mb-4">
+            <span class="triage-meta-label">Bearbeiter</span>
+            <p id="details-assignee" class="m-0 text-[11.5px] text-[#374151]">–</p>
+            <select id="ctrl-assignee" class="hidden">
+              <option value="">Nicht zugewiesen</option>
+              {% for user in assignees %}
+              <option value="{{ user.id }}">{{ user.display_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-4">
+            <span class="triage-meta-label">Kategorie</span>
+            <p id="details-category" class="m-0 text-[11.5px] text-[#374151]">–</p>
+            <select id="ctrl-category" class="hidden">
+              <option value="">Keine</option>
+              {% for category in categories %}
+              <option value="{{ category.id }}">{{ category.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-4">
+            <span class="triage-meta-label">Fall</span>
+            <p id="details-case" class="m-0 text-[11.5px] font-semibold" style="color:#4f46e5;">–</p>
+          </div>
+          <div class="h-px bg-line my-5"></div>
+          <div class="mb-4">
+            <span class="triage-meta-label">Status ändern</span>
+            <select id="ctrl-status" class="triage-field w-full px-3">
+              <option value="neu">Neu</option>
+              <option value="in_bearbeitung">In Bearbeitung</option>
+              <option value="wartet_aktion">Wartet auf Antwort</option>
+              <option value="weitergeleitet">Weitergeleitet</option>
+              <option value="beantwortet">Beantwortet</option>
+            </select>
+          </div>
+          <div class="h-px bg-line my-5"></div>
+          <div class="mb-4">
+            <span class="triage-meta-label">Absender</span>
+            <p id="details-sender" class="m-0 text-xs text-ink2 break-words">–</p>
+          </div>
+          <div class="mb-4">
+            <span class="triage-meta-label">Empfangen</span>
+            <p id="details-received" class="m-0 text-xs text-ink2">–</p>
+          </div>
+          <div class="mb-0">
+            <span class="triage-meta-label">Zusammenfassung</span>
+            <p class="text-xs text-ink2 m-0 leading-relaxed" id="overview-summary">–</p>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <div id="forward-drawer" class="absolute top-0 right-0 h-full bg-paper border-l border-line shadow-xl transition-all" style="width:0;overflow:hidden;z-index:34;">
+      <div style="width:420px;height:100%;display:flex;flex-direction:column;">
+        <div class="px-4 py-4 border-b border-line flex items-center justify-between">
+          <h3 class="text-base font-semibold text-ink m-0">E-Mail senden</h3>
+          <button id="forward-close" class="btn-ghost h-8 w-8 p-0">×</button>
+        </div>
+        <div class="p-4 overflow-y-auto flex-1" id="forward-content">
+          {% if not smtp_configured %}
+          <div class="rounded-lg border px-3 py-2 text-xs mb-4" style="background:#FFF8E6;border-color:rgba(183,131,47,0.3);color:#8a6520;">
+            Kein SMTP konfiguriert. Die Weiterleitung wird gespeichert, aber nicht als E-Mail versendet.
+          </div>
+          {% endif %}
+
+          {% if triage_reply_enabled %}
+          <div class="mb-4">
+            <label class="form-label text-xs">Aktion</label>
+            <div class="flex gap-1 border-b border-line">
+              <button id="forward-action-reply" class="forward-action-tab px-3 py-2 text-xs font-medium border-b-2 border-transparent text-ink2" data-forward-action="reply">Antwort senden</button>
+              <button id="forward-action-forward" class="forward-action-tab px-3 py-2 text-xs font-medium border-b-2 border-brand text-brand" data-forward-action="forward">Weiterleiten</button>
+            </div>
+          </div>
+          {% endif %}
+
+          <div id="reply-target-info" class="hidden mb-4 rounded-lg border border-line bg-app px-3 py-2">
+            <p class="text-[0.7rem] uppercase tracking-wide text-muted m-0">Antwort an</p>
+            <p id="reply-target-email" class="text-sm text-ink font-medium m-0 mt-0.5">–</p>
+          </div>
+
+          <div id="forward-target-tabs" class="flex gap-1 border-b border-line mb-4">
+            <button id="forward-tab-route" class="forward-tab px-3 py-2 text-xs font-medium border-b-2 border-brand text-brand" data-forward-tab="route">An Weiterleitungsziel</button>
+            <button id="forward-tab-person" class="forward-tab px-3 py-2 text-xs font-medium border-b-2 border-transparent text-ink2" data-forward-tab="person">An Person</button>
+          </div>
+
+          <div id="forward-panel-route">
+            <div id="forward-routes-loading" class="text-xs text-muted text-center py-3">Lädt Weiterleitungsziele …</div>
+            <div id="forward-routes" class="flex flex-col gap-1.5" style="max-height:220px;overflow:auto;"></div>
+          </div>
+
+          <div id="forward-panel-person" class="hidden">
+            <div class="flex flex-col gap-3">
+              <div>
+                <label class="form-label text-xs">Benutzer</label>
+                <select id="forward-user" class="form-select h-10 text-sm">
+                  <option value="">Bitte auswählen</option>
+                  {% for user in assignees %}
+                  <option value="{{ user.id }}">{{ user.display_name }} &lt;{{ user.email }}&gt;</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-4 mt-4 border-t border-line flex flex-col gap-3">
+            <div id="forward-template-wrap" style="display:none;">
+              <label class="form-label text-xs">Vorlage</label>
+              <select id="forward-template" class="form-select h-10 text-sm">
+                <option value="">Keine Vorlage</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label text-xs">Betreff</label>
+              <input id="forward-subject" type="text" class="form-input h-10 text-sm" placeholder="Betreff">
+            </div>
+            <div>
+              <label class="form-label text-xs">Nachricht</label>
+              <textarea id="forward-body" class="form-textarea text-sm" style="min-height:180px;" placeholder="Nachricht eingeben …"></textarea>
+            </div>
+            <div>
+              <label class="form-label text-xs">Interne Notiz (optional)</label>
+              <textarea id="forward-note" class="form-textarea" style="min-height:80px;" placeholder="Kurze Notiz zur Weiterleitung …"></textarea>
+            </div>
+            <div>
+              <label id="forward-status-label" class="form-label text-xs">Status nach Versand</label>
+              <select id="forward-status" class="form-select h-10 text-sm">
+                <option value="weitergeleitet">Weitergeleitet</option>
+                <option value="wartet_aktion">Wartet auf Antwort</option>
+                <option value="beantwortet">Beantwortet</option>
+              </select>
+            </div>
+            <div class="flex gap-2">
+              <button id="forward-submit" class="btn h-9 px-3 text-sm">Senden</button>
+              <button id="forward-cancel" class="btn-ghost h-9 px-3 text-sm">Abbrechen</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="action-toast" style="display:none; position:absolute; bottom:1.25rem; left:50%; transform:translateX(-50%); padding:.55rem 1rem; border-radius:10px; font-size:.82rem; font-weight:500; white-space:nowrap; z-index:50;"></div>
+    <div id="drawer-scrim" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.18); z-index:31; opacity:0; transition:opacity 0.2s ease;"></div>
+  </section>
+</div>
+
+<div id="queue-search-backdrop" class="hidden fixed inset-0 bg-black/20 z-[35]"></div>
+<div id="queue-search-overlay" class="hidden fixed z-[36] w-[520px] max-w-[92vw] bg-paper border border-line rounded-xl shadow-xl p-3">
+  <form id="queue-search-form" method="get" action="/channels/email-incoming" class="flex items-center gap-2">
+    <input type="hidden" name="status_scope" value="{{ filters.status_scope }}">
+    <input type="hidden" name="assigned_filter" value="{{ filters.assigned_filter }}">
+    {% if filters.category_id %}<input type="hidden" name="category_id" value="{{ filters.category_id }}">{% endif %}
+    <div class="relative flex-1 min-w-0">
+      <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input id="queue-search-input" name="q" value="{{ filters.q }}" type="search" placeholder="Suche Absender, Betreff …" class="form-input h-9 pl-8 pr-2.5 text-sm w-full">
+    </div>
+    <button type="submit" class="btn h-9 px-3 text-sm">Suchen</button>
+    <button id="queue-search-close" type="button" class="btn-ghost h-9 w-9 px-0 text-sm" title="Suche schließen">✕</button>
+  </form>
+</div>
+
+<div id="note-modal" class="hidden fixed inset-0 z-40">
+  <div class="absolute inset-0 bg-black/30" data-note-close></div>
+  <div class="absolute inset-0 flex items-center justify-center p-4">
+    <div class="w-full max-w-2xl rounded-xl border border-line bg-paper shadow-xl">
+      <div class="px-4 py-3 border-b border-line flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-ink m-0">Interne Notiz</h3>
+        <button id="note-modal-close" type="button" class="btn-ghost h-8 w-8 p-0">×</button>
+      </div>
+      <div class="px-4 py-4">
+        <textarea id="note-modal-input" class="form-textarea w-full text-sm" style="min-height:240px;" placeholder="Notiz zur Bearbeitung ..."></textarea>
+      </div>
+      <div class="px-4 pb-4 flex justify-end gap-2">
+        <button type="button" class="btn-ghost h-9 px-3 text-sm" data-note-close>Abbrechen</button>
+        <button id="note-modal-save" type="button" class="btn h-9 px-3 text-sm">Speichern</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="category-modal" class="hidden fixed inset-0 z-40">
+  <div class="absolute inset-0 bg-black/30" data-category-close></div>
+  <div class="absolute inset-0 flex items-center justify-center p-4">
+    <div class="w-full max-w-md rounded-xl border border-line bg-paper shadow-xl">
+      <div class="px-4 py-3 border-b border-line flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-ink m-0">Kategorie anlegen</h3>
+        <button id="category-modal-close" type="button" class="btn-ghost h-8 w-8 p-0">×</button>
+      </div>
+      <form id="category-create-form" class="px-4 py-4 flex flex-col gap-3">
+        <div>
+          <label class="form-label text-xs">Name</label>
+          <input id="category-create-name" type="text" class="form-input h-9 text-sm" placeholder="z. B. Personal" required>
+        </div>
+        <div>
+          <label class="form-label text-xs">Beschreibung (optional)</label>
+          <textarea id="category-create-description" class="form-textarea text-sm" style="min-height:72px;" placeholder="Kurzbeschreibung der Kategorie"></textarea>
+        </div>
+        <p id="category-create-error" class="hidden text-xs text-err m-0"></p>
+        <div class="flex justify-end gap-2">
+          <button type="button" class="btn-ghost h-9 px-3 text-sm" data-category-close>Abbrechen</button>
+          <button id="category-create-submit" type="submit" class="btn h-9 px-3 text-sm">Anlegen</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  let categoryMap = {
+    {% for category in categories %}
+    {{ category.id }}: {{ category.name | tojson }},
+    {% endfor %}
+  };
+  let categoriesState = [
+    {% for category in categories %}
+    { id: {{ category.id }}, name: {{ category.name | tojson }} },
+    {% endfor %}
+  ];
+  const assigneeMap = {
+    {% for user in assignees %}
+    {{ user.id }}: {
+      id: {{ user.id }},
+      display_name: {{ user.display_name | tojson }},
+      email: {{ user.email | tojson }},
+    },
+    {% endfor %}
+  };
+  const statusScope = {{ status_scope | tojson }};
+  const assignedFilter = {{ assigned_filter | tojson }};
+  const assignedUserId = {{ filters.assigned_user_id if filters.assigned_user_id is not none else 'null' }};
+  const statusGroups = {{ status_groups | tojson }};
+  const openStatuses = statusGroups.open || [];
+  const closedStatuses = statusGroups.closed || [];
+  const priorityMetaByCategoryId = {{ priority_meta_by_category_id | tojson }};
+  const selectedIdFromQuery = {{ selected_id if selected_id is not none else 'null' }};
+  const triageReplyEnabled = {{ triage_reply_enabled | tojson }};
+
+  const statusMeta = {
+    neu: { label: 'Neu', chip: 'chip-neu', color: '#3b82f6', bg: '#eff6ff' },
+    in_bearbeitung: { label: 'In Bearbeitung', chip: 'chip-progress', color: '#d97706', bg: '#fffbeb' },
+    wartet_aktion: { label: 'Wartet auf Antwort', chip: 'chip-pending', color: '#7c3aed', bg: '#f5f3ff' },
+    weitergeleitet: { label: 'Weitergeleitet', chip: 'chip-done', color: '#0891b2', bg: '#ecfeff' },
+    beantwortet: { label: 'Beantwortet', chip: 'chip-done', color: '#059669', bg: '#f0fdf4' },
+    geschlossen: { label: 'Abgeschlossen', chip: 'chip-neutral', color: '#64748b', bg: '#f8fafc' },
+    spam: { label: 'Spam', chip: 'chip-duplicate', color: '#be123c', bg: '#fff1f2' },
+    fehler: { label: 'Fehler', chip: 'chip-duplicate', color: '#dc2626', bg: '#fef2f2' },
+  };
+
+  let currentItemId = null;
+  let currentData = null;
+  let currentTab = 'overview';
+  let toastTimer = null;
+  let scrimTimer = null;
+  let forwardRoutes = [];
+  let selectedForwardRouteId = null;
+  let forwardTab = 'route';
+  let forwardAction = 'forward';
+  let previewHeightRaf = null;
+  let isReplyMode = false;
+
+  function csrf() {
+    return document.querySelector('meta[name="csrf-token"]')?.content || '';
+  }
+
+  function esc(value) {
+    if (value == null) return '';
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function showToast(message, ok = true) {
+    const toast = document.getElementById('action-toast');
+    toast.textContent = message;
+    if (ok) {
+      toast.style.cssText = 'display:block; position:absolute; bottom:1.25rem; left:50%; transform:translateX(-50%); padding:.55rem 1rem; border-radius:10px; font-size:.82rem; font-weight:500; white-space:nowrap; z-index:50; background:#E8F5EC; color:#2F7D57; border:1px solid rgba(47,125,87,.25);';
+    } else {
+      toast.style.cssText = 'display:block; position:absolute; bottom:1.25rem; left:50%; transform:translateX(-50%); padding:.55rem 1rem; border-radius:10px; font-size:.82rem; font-weight:500; white-space:nowrap; z-index:50; background:#FBEAEA; color:#C05656; border:1px solid rgba(192,86,86,.25);';
+    }
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => {
+      toast.style.display = 'none';
+    }, 2800);
+  }
+
+  const currentFilters = {
+    category_id: {{ filters.category_id if filters.category_id is not none else 'null' }},
+    q: {{ filters.q | tojson }},
+  };
+
+  async function refreshScopeCounts() {
+    try {
+      const params = new URLSearchParams();
+      params.set('assigned_filter', assignedFilter || 'all');
+      if (assignedUserId != null) params.set('assignee_id', String(assignedUserId));
+      if (currentFilters.category_id != null) params.set('category_id', String(currentFilters.category_id));
+      if (currentFilters.q) params.set('q', currentFilters.q);
+      const res = await fetch('/api/mail-items/status-counts?' + params.toString(), {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!res.ok) return;
+      const counts = await res.json();
+      ['open', 'all', 'closed'].forEach((scope) => {
+        const el = document.querySelector('[data-scope-count="' + scope + '"]');
+        if (!el) return;
+        el.textContent = String(Number(counts[scope]) || 0);
+      });
+    } catch (e) { /* silent */ }
+  }
+
+  function refreshAllCounts() {
+    refreshScopeCounts();
+    if (typeof window.refreshNavCounts === 'function') window.refreshNavCounts();
+  }
+
+  function formatNoteTime(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    } catch { return ''; }
+  }
+
+  function renderNoteItem(note) {
+    const li = document.createElement('li');
+    li.className = 'py-3 flex items-start gap-3';
+    li.dataset.noteId = note.id;
+    const initials = note.author_initials || 'SYS';
+    const displayName = note.author_display_name || 'System';
+    const time = formatNoteTime(note.created_at);
+    li.innerHTML = `
+      <div class="w-8 h-8 rounded-full bg-brand-s flex items-center justify-center text-brand text-[0.72rem] font-semibold flex-shrink-0">${esc(initials)}</div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 text-xs">
+          <span class="font-semibold text-ink">${esc(displayName)}</span>
+          <span class="text-muted">${esc(time)}</span>
+        </div>
+        <div class="mt-1 text-sm text-ink2" style="white-space:pre-wrap;word-break:break-word;">${esc(note.body || '')}</div>
+      </div>`;
+    return li;
+  }
+
+  function renderNotesList(notes) {
+    const list = document.getElementById('notes-list');
+    const empty = document.getElementById('notes-empty');
+    const count = document.getElementById('notes-count');
+    if (!list) return;
+    list.querySelectorAll('li[data-note-id]').forEach((el) => el.remove());
+    if (!notes || notes.length === 0) {
+      if (empty) empty.style.display = '';
+      if (count) count.textContent = '0';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    notes.forEach((note) => list.appendChild(renderNoteItem(note)));
+    if (count) count.textContent = String(notes.length);
+  }
+
+  async function loadNotes() {
+    if (!currentItemId) return;
+    try {
+      const notes = await api(`/api/mail-items/${currentItemId}/notes`);
+      renderNotesList(notes);
+    } catch (e) {
+      renderNotesList([]);
+    }
+  }
+
+  async function saveNote(body, { onSuccess } = {}) {
+    if (!currentItemId) return false;
+    const trimmed = (body || '').trim();
+    if (!trimmed) return false;
+    try {
+      const note = await api(`/api/mail-items/${currentItemId}/notes`, 'POST', { body: trimmed });
+      const list = document.getElementById('notes-list');
+      const empty = document.getElementById('notes-empty');
+      const count = document.getElementById('notes-count');
+      if (list) {
+        if (empty) empty.style.display = 'none';
+        list.appendChild(renderNoteItem(note));
+        if (count) count.textContent = String(list.querySelectorAll('li[data-note-id]').length);
+      }
+      showToast('Notiz gespeichert ✓');
+      if (typeof onSuccess === 'function') onSuccess(note);
+      return true;
+    } catch (e) {
+      showToast('Notiz konnte nicht gespeichert werden.', false);
+      return false;
+    }
+  }
+
+
+  async function api(url, method = 'GET', body = null) {
+    const init = { method, headers: {} };
+    if (method !== 'GET') {
+      init.headers['x-csrf-token'] = csrf();
+    }
+    if (body != null) {
+      init.headers['Content-Type'] = 'application/json';
+      init.body = JSON.stringify(body);
+    }
+    const response = await fetch(url, init);
+    if (!response.ok) {
+      let detail = '';
+      const responseType = response.headers.get('content-type') || '';
+      if (responseType.includes('application/json')) {
+        const payload = await response.json().catch(() => null);
+        if (payload && typeof payload.detail === 'string') {
+          detail = payload.detail;
+        }
+      }
+      if (!detail) {
+        detail = await response.text().catch(() => '');
+      }
+      throw new Error(detail || response.statusText || 'Request failed');
+    }
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return response.json();
+    }
+    return null;
+  }
+
+  function syncCategoryMap() {
+    categoryMap = {};
+    categoriesState.forEach((category) => {
+      categoryMap[category.id] = category.name;
+    });
+  }
+
+  function sortedCategories(input) {
+    return [...input].sort((a, b) => a.name.localeCompare(b.name, 'de-DE', { sensitivity: 'base' }));
+  }
+
+  function renderCategorySelects({ detailsValue = null, filterValue = null } = {}) {
+    const detailsSelect = document.getElementById('ctrl-category');
+    if (detailsSelect) {
+      const selected = detailsValue !== null ? String(detailsValue) : detailsSelect.value;
+      detailsSelect.innerHTML = '<option value="">Keine</option>' + categoriesState
+        .map((category) => `<option value="${category.id}">${esc(category.name)}</option>`)
+        .join('');
+      detailsSelect.value = selected || '';
+    }
+
+    const filterSelect = document.getElementById('category-filter-select');
+    if (filterSelect) {
+      const selected = filterValue !== null ? String(filterValue) : filterSelect.value;
+      filterSelect.innerHTML = '<option value="">Alle Kategorien</option>' + categoriesState
+        .map((category) => `<option value="${category.id}">${esc(category.name)}</option>`)
+        .join('');
+      filterSelect.value = selected || '';
+    }
+  }
+
+  function updateCategoryAssignButton(categoryId) {
+    const label = document.getElementById('btn-category-assign-label');
+    if (!label) return;
+    if (categoryId && categoryMap[categoryId]) {
+      label.textContent = categoryMap[categoryId];
+      return;
+    }
+    label.textContent = 'Kategorie';
+  }
+
+  function renderCategoryAssignMenu(selectedCategoryId = null) {
+    const menu = document.getElementById('category-assign-options');
+    if (!menu) return;
+    const selected = selectedCategoryId !== null ? String(selectedCategoryId || '') : String(currentData?.category_id || '');
+    menu.innerHTML = categoriesState.map((category) => {
+      const active = String(category.id) === selected;
+      return `<button type="button" class="category-assign-option w-full text-left px-3 py-2 text-xs ${active ? 'font-semibold' : 'text-ink2 hover:bg-app hover:text-ink'}" style="${active ? 'color:#4E6B57;background:#EAF1EB;' : ''}" data-category-id="${category.id}">${esc(category.name)}</button>`;
+    }).join('');
+  }
+
+  async function refreshCategories({ selectedCategoryId = null, silent = false } = {}) {
+    const detailsSelect = document.getElementById('ctrl-category');
+    const filterSelect = document.querySelector('select[name="category_id"]');
+    const currentDetailsValue = detailsSelect?.value || '';
+    const currentFilterValue = filterSelect?.value || '';
+
+    try {
+      const categories = await api('/api/categories');
+      categoriesState = sortedCategories(categories.map((category) => ({
+        id: category.id,
+        name: category.name,
+      })));
+      syncCategoryMap();
+      const selectedForUi = selectedCategoryId ?? currentData?.category_id ?? currentDetailsValue;
+      renderCategorySelects({
+        detailsValue: selectedCategoryId ?? currentDetailsValue,
+        filterValue: currentFilterValue,
+      });
+      renderCategoryAssignMenu(selectedForUi ? Number(selectedForUi) : null);
+      updateCategoryAssignButton(selectedForUi ? Number(selectedForUi) : null);
+      if (!silent) {
+        showToast('Kategorien aktualisiert ✓');
+      }
+    } catch (error) {
+      showToast(error.message || 'Kategorien konnten nicht geladen werden.', false);
+    }
+  }
+
+  function openCategoryModal() {
+    document.getElementById('category-create-name').value = '';
+    document.getElementById('category-create-description').value = '';
+    const error = document.getElementById('category-create-error');
+    error.classList.add('hidden');
+    error.textContent = '';
+    document.getElementById('category-modal').classList.remove('hidden');
+    document.getElementById('category-create-name').focus();
+  }
+
+  function closeCategoryModal() {
+    document.getElementById('category-modal').classList.add('hidden');
+    const error = document.getElementById('category-create-error');
+    error.classList.add('hidden');
+    error.textContent = '';
+  }
+
+  function positionQueueSearchOverlay() {
+    const overlay = document.getElementById('queue-search-overlay');
+    const anchor = document.getElementById('queue-header-controls');
+    if (!overlay || !anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    overlay.style.top = `${Math.round(rect.bottom + 10)}px`;
+    overlay.style.left = `${Math.round(rect.left + (rect.width / 2))}px`;
+    overlay.style.transform = 'translateX(-50%)';
+  }
+
+  function openQueueSearch() {
+    positionQueueSearchOverlay();
+    document.getElementById('queue-search-overlay')?.classList.remove('hidden');
+    document.getElementById('queue-search-backdrop')?.classList.remove('hidden');
+    window.setTimeout(() => document.getElementById('queue-search-input')?.focus(), 40);
+  }
+
+  function closeQueueSearch() {
+    document.getElementById('queue-search-overlay')?.classList.add('hidden');
+    document.getElementById('queue-search-backdrop')?.classList.add('hidden');
+  }
+
+  function openNoteModal() {
+    const input = document.getElementById('note-modal-input');
+    if (input) input.value = '';
+    document.getElementById('note-modal')?.classList.remove('hidden');
+    window.setTimeout(() => input?.focus(), 30);
+  }
+
+  function closeNoteModal() {
+    document.getElementById('note-modal')?.classList.add('hidden');
+  }
+
+  async function saveNoteModal() {
+    const input = document.getElementById('note-modal-input');
+    const body = (input?.value || '').trim();
+    if (!body) {
+      showToast('Bitte Notiztext eingeben.', false);
+      return;
+    }
+    const ok = await saveNote(body);
+    if (ok) {
+      if (input) input.value = '';
+      closeNoteModal();
+    }
+  }
+
+  async function submitCategoryCreate(event) {
+    event.preventDefault();
+    const nameInput = document.getElementById('category-create-name');
+    const descriptionInput = document.getElementById('category-create-description');
+    const submit = document.getElementById('category-create-submit');
+    const error = document.getElementById('category-create-error');
+
+    const name = nameInput.value.trim();
+    const description = descriptionInput.value.trim();
+    if (!name) {
+      error.textContent = 'Bitte einen Kategorienamen eingeben.';
+      error.classList.remove('hidden');
+      return;
+    }
+
+    submit.disabled = true;
+    submit.textContent = 'Anlegen ...';
+    error.classList.add('hidden');
+    error.textContent = '';
+
+    try {
+      const category = await api('/api/categories', 'POST', {
+        name,
+        description: description || null,
+      });
+      await refreshCategories({ selectedCategoryId: category.id, silent: true });
+      closeCategoryModal();
+      if (currentItemId) {
+        await patchCurrent({ category_id: category.id }, 'Kategorie angelegt und zugewiesen ✓');
+      } else {
+        showToast('Kategorie angelegt ✓');
+      }
+    } catch (err) {
+      error.textContent = err.message || 'Kategorie konnte nicht angelegt werden.';
+      error.classList.remove('hidden');
+    } finally {
+      submit.disabled = false;
+      submit.textContent = 'Anlegen';
+    }
+  }
+
+  function setActiveRow(row) {
+    document.querySelectorAll('.queue-row').forEach((element) => {
+      element.classList.remove('is-selected');
+    });
+    if (!row) {
+      return;
+    }
+    row.classList.add('is-selected');
+  }
+
+  function matchesStatusScope(statusValue) {
+    if (statusScope === 'all') return true;
+    if (statusScope === 'closed') return closedStatuses.includes(statusValue);
+    return openStatuses.includes(statusValue);
+  }
+
+  function queueMatchesItem(item) {
+    if (!matchesStatusScope(item.status)) return false;
+    if (assignedFilter === 'unassigned') {
+      return item.assigned_to_user_id == null;
+    }
+    if (assignedFilter.startsWith('user:')) {
+      return assignedUserId != null && Number(item.assigned_to_user_id || 0) === Number(assignedUserId);
+    }
+    return true;
+  }
+
+  function formatDateTime(value) {
+    if (!value) return '–';
+    const date = new Date(value);
+    return date.toLocaleString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  function parseSender(value) {
+    const raw = String(value || '').trim();
+    if (!raw) {
+      return { name: 'Unbekannt', email: '' };
+    }
+    const match = raw.match(/^(.*)<([^>]+)>$/);
+    if (match) {
+      const name = (match[1] || '').trim().replace(/^"+|"+$/g, '') || match[2].trim();
+      return { name, email: match[2].trim() };
+    }
+    if (raw.includes('@')) {
+      return { name: raw.split('@')[0], email: raw };
+    }
+    return { name: raw, email: '' };
+  }
+
+  function renderHeaderChips(item) {
+    const container = document.getElementById('ws-header-chips');
+    if (!container) return;
+    const meta = statusMeta[item?.status];
+    if (meta) {
+      container.innerHTML = `<span class="chip ${meta.chip} text-[0.65rem] px-1.5 py-0">${esc(meta.label)}</span>`;
+      container.style.display = 'inline-flex';
+      container.style.alignItems = 'center';
+    } else {
+      container.innerHTML = '';
+      container.style.display = 'none';
+    }
+  }
+
+  function renderAttachments(item) {
+    const card = document.getElementById('message-attachments-card');
+    const container = document.getElementById('message-attachments');
+    const attachments = item.attachments || [];
+    if (attachments.length === 0) {
+      card.style.display = 'none';
+      container.innerHTML = '';
+      return;
+    }
+    card.style.display = '';
+    container.innerHTML = attachments.map((attachment) => {
+      return `<a href="/api/mail-items/${item.id}/attachment/${attachment.id}" class="btn-ghost-sm" download>${esc(attachment.original_filename)}</a>`;
+    }).join('');
+  }
+
+  function renderMessageBody(item) {
+    const frame = document.getElementById('message-frame');
+    const text = document.getElementById('message-text');
+    if (item.body_html) {
+      text.classList.add('hidden');
+      frame.classList.remove('hidden');
+      const html = item.body_html;
+      const isDocument = /^\s*<!doctype\b|^\s*<html\b/i.test(html);
+      frame.srcdoc = isDocument ? html : `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:20px 0 0;font-size:13.5px;line-height:1.8;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#334155;word-break:break-word;} a{color:#4E6B57;}</style></head><body>${html}</body></html>`;
+      return;
+    }
+    frame.classList.add('hidden');
+    text.classList.remove('hidden');
+    text.textContent = item.body_text || '(Kein Inhalt verfügbar)';
+  }
+
+  function renderQueueRow(item) {
+    const row = document.querySelector(`.queue-row[data-id="${item.id}"]`);
+    if (!row) return;
+
+    row.dataset.status = item.status;
+    row.dataset.categoryId = item.category_id || '';
+    row.dataset.assigneeId = item.assigned_to_user_id || '';
+
+    const subject = row.querySelector('.row-subject');
+    if (subject) {
+      subject.className = 'row-subject text-[0.82rem] font-semibold text-ink m-0 truncate leading-snug';
+    }
+
+    const dot = row.querySelector('.queue-dot');
+    if (dot) {
+      dot.className = 'queue-dot mt-[5px] inline-block rounded-full flex-shrink-0';
+      dot.style.width = '7px';
+      dot.style.height = '7px';
+      dot.style.background = statusMeta[item.status]?.color || '#94a3b8';
+    }
+
+    const chips = [];
+    const status = statusMeta[item.status];
+    if (status) {
+      chips.push(`<span class="chip ${status.chip} text-[0.65rem] px-1.5 py-0">${esc(status.label)}</span>`);
+    }
+    if (item.assigned_to_user_id) {
+      chips.push('<span class="chip chip-neutral text-[0.65rem] px-1.5 py-0">Zugewiesen</span>');
+    }
+    const priority = item.category_id ? priorityMetaByCategoryId[String(item.category_id)] : null;
+    if (priority?.label) {
+      const klass = priority.label === 'URGENT'
+        ? 'priority-urgent'
+        : (priority.label === 'HIGH' ? 'priority-high' : 'priority-low');
+      chips.push(`<span class="priority-pill ${klass}">${esc(priority.label)}</span>`);
+    }
+    if (item.category_id && categoryMap[item.category_id]) {
+      chips.push(`<span class="queue-chip">${esc(categoryMap[item.category_id])}</span>`);
+    }
+    if (item.assigned_to_user_id && assigneeMap[item.assigned_to_user_id]) {
+      chips.push(`<span class="assignee-badge">${esc(assigneeMap[item.assigned_to_user_id].display_name)}</span>`);
+    }
+    if (item.case_id) {
+      chips.push('<span class="chip chip-neutral text-[0.65rem] px-1.5 py-0" data-thread-chip>Fall</span>');
+    }
+    if (item.has_attachments) {
+      chips.push('<span class="inline-flex items-center gap-1 text-[0.65rem] text-muted"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Anlage</span>');
+    }
+
+    const chipContainer = row.querySelector('.row-chips');
+    if (chipContainer) {
+      chipContainer.innerHTML = chips.join('');
+    }
+  }
+
+  function syncPreviewHeight() {
+    const card = document.getElementById('message-preview-card');
+    if (!card || card.classList.contains('hidden') || isReplyMode) return;
+    const rect = card.getBoundingClientRect();
+    const bottomPadding = 24; // aligns with p-6 container bottom space
+    const available = Math.floor(window.innerHeight - rect.top - bottomPadding);
+    card.style.height = `${Math.max(260, available)}px`;
+  }
+
+  function requestPreviewHeightSync() {
+    if (previewHeightRaf) cancelAnimationFrame(previewHeightRaf);
+    previewHeightRaf = requestAnimationFrame(() => {
+      previewHeightRaf = null;
+      syncPreviewHeight();
+    });
+  }
+
+  function setReplyMode(active) {
+    isReplyMode = Boolean(active);
+    const shell = document.querySelector('.overview-shell');
+    const compose = document.getElementById('reply-compose');
+    const messagePreview = document.getElementById('message-preview-card');
+    if (shell) shell.classList.toggle('reply-mode', isReplyMode);
+    if (compose) compose.classList.toggle('hidden', !isReplyMode);
+    if (messagePreview) messagePreview.classList.toggle('hidden', isReplyMode);
+  }
+
+  function renderWorkspace(item) {
+    currentData = item;
+    document.getElementById('workspace-empty').classList.add('hidden');
+    document.getElementById('workspace').classList.remove('hidden');
+
+    const subject = item.subject || '(ohne Betreff)';
+    const sender = parseSender(item.sender);
+    const receivedAt = formatDateTime(item.received_at);
+    const subjectElement = document.getElementById('ws-subject');
+    if (subjectElement) {
+      subjectElement.textContent = subject;
+      subjectElement.title = subject;
+      subjectElement.dataset.expanded = 'false';
+      subjectElement.style.webkitLineClamp = '2';
+    }
+    const subjectBig = document.getElementById('ws-subject-big');
+    if (subjectBig) {
+      subjectBig.textContent = subject;
+      subjectBig.title = subject;
+    }
+
+    const wsFromName = document.getElementById('ws-from-name');
+    if (wsFromName) {
+      wsFromName.textContent = sender.name || 'Unbekannt';
+      wsFromName.title = sender.email || '';
+    }
+    const wsFromNameBig = document.getElementById('ws-from-name-big');
+    if (wsFromNameBig) wsFromNameBig.textContent = sender.name || 'Unbekannt';
+    const wsFromEmailBig = document.getElementById('ws-from-email-big');
+    if (wsFromEmailBig) wsFromEmailBig.textContent = sender.email || '';
+    const replyName = document.getElementById('ws-reply-name');
+    if (replyName) replyName.textContent = sender.name || 'Unbekannt';
+    const avatar = document.getElementById('ws-avatar');
+    if (avatar) {
+      const initials = (sender.name || 'U')
+        .split(' ')
+        .map((token) => token.trim()[0] || '')
+        .join('')
+        .slice(0, 2)
+        .toUpperCase();
+      avatar.textContent = initials || 'U';
+    }
+
+    // ws-from-email-wrap stays hidden — email is recoverable via hover on the name
+    const fromEmail = document.getElementById('ws-from-email');
+    if (fromEmail) {
+      fromEmail.textContent = sender.email || '';
+      fromEmail.title = sender.email || '';
+    }
+
+    document.getElementById('ws-received').textContent = receivedAt;
+    const wsReceivedHead = document.getElementById('ws-received-head');
+    if (wsReceivedHead) wsReceivedHead.textContent = receivedAt;
+    const wsReceivedInline = document.getElementById('ws-received-inline');
+    if (wsReceivedInline) wsReceivedInline.textContent = receivedAt;
+    document.getElementById('details-received').textContent = receivedAt;
+    document.getElementById('details-sender').textContent = sender.email ? `${sender.name} <${sender.email}>` : sender.name;
+    const detailsStatusBadge = document.getElementById('details-status-badge');
+    if (detailsStatusBadge) {
+      const status = statusMeta[item.status] || { label: item.status || '–', color: '#64748b', bg: '#f8fafc' };
+      detailsStatusBadge.textContent = status.label;
+      detailsStatusBadge.style.color = status.color;
+      detailsStatusBadge.style.background = status.bg;
+      detailsStatusBadge.style.borderColor = `${status.color}22`;
+    }
+    const wsMailId = document.getElementById('ws-mail-id');
+    if (wsMailId) wsMailId.textContent = `#E${item.id}`;
+    const priorityBadge = document.getElementById('ws-priority');
+    if (priorityBadge) {
+      const priority = item.category_id ? priorityMetaByCategoryId[String(item.category_id)] : null;
+      if (priority?.label) {
+        priorityBadge.textContent = priority.label;
+        priorityBadge.classList.remove('hidden', 'priority-urgent', 'priority-high', 'priority-low');
+        priorityBadge.classList.add(
+          priority.label === 'URGENT' ? 'priority-urgent' : (priority.label === 'HIGH' ? 'priority-high' : 'priority-low')
+        );
+      } else {
+        priorityBadge.classList.add('hidden');
+      }
+    }
+
+    const caseWrap = document.getElementById('ws-case-wrap');
+    if (item.case_id) {
+      document.getElementById('ws-case').textContent = `Fall #${item.case_id}`;
+      caseWrap.classList.remove('hidden');
+      document.getElementById('details-case').textContent = `Fall #${item.case_id}`;
+    } else {
+      caseWrap.classList.add('hidden');
+      document.getElementById('details-case').textContent = '–';
+    }
+
+    const assigneeControl = document.getElementById('ctrl-assignee');
+    const categoryControl = document.getElementById('ctrl-category');
+    const statusControl = document.getElementById('ctrl-status');
+
+    assigneeControl.value = item.assigned_to_user_id ? String(item.assigned_to_user_id) : '';
+    categoryControl.value = item.category_id ? String(item.category_id) : '';
+    statusControl.value = item.status;
+    const detailsAssignee = document.getElementById('details-assignee');
+    if (detailsAssignee) {
+      detailsAssignee.textContent = item.assigned_to_user_id && assigneeMap[item.assigned_to_user_id]
+        ? assigneeMap[item.assigned_to_user_id].display_name
+        : '–';
+    }
+    const detailsCategory = document.getElementById('details-category');
+    if (detailsCategory) {
+      detailsCategory.textContent = item.category_id && categoryMap[item.category_id]
+        ? categoryMap[item.category_id]
+        : '–';
+    }
+    renderCategoryAssignMenu(item.category_id ? Number(item.category_id) : null);
+    updateCategoryAssignButton(item.category_id ? Number(item.category_id) : null);
+
+    document.getElementById('notes-input').value = '';
+    renderNotesList([]);
+    loadNotes();
+    const btnAssign = document.getElementById('btn-assign');
+    if (btnAssign) {
+      const label = item.assigned_to_user_id && assigneeMap[item.assigned_to_user_id]
+        ? assigneeMap[item.assigned_to_user_id].display_name
+        : 'Zuweisen';
+      btnAssign.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/></svg>${esc(label)}`;
+    }
+
+    renderHeaderChips(item);
+    renderAttachments(item);
+    renderMessageBody(item);
+    renderQueueRow(item);
+    if (!isReplyMode) {
+      closeReplyCompose(true);
+    } else {
+      setReplyMode(true);
+      renderReplyOriginalMessage(item);
+    }
+    requestPreviewHeightSync();
+
+    const summaryParts = [];
+    summaryParts.push(`Absender: ${sender.name}`);
+    if (sender.email) summaryParts.push(`E-Mail: ${sender.email}`);
+    if (item.category_id && categoryMap[item.category_id]) summaryParts.push(`Kategorie: ${categoryMap[item.category_id]}`);
+    if (item.assigned_to_user_id && assigneeMap[item.assigned_to_user_id]) summaryParts.push(`Zuständig: ${assigneeMap[item.assigned_to_user_id].display_name}`);
+    if (item.case_id) summaryParts.push(`Fall-ID: ${item.case_id}`);
+    document.getElementById('overview-summary').textContent = summaryParts.length ? summaryParts.join(' • ') : 'Noch keine zusätzlichen Angaben vorhanden.';
+
+    if (currentTab === 'timeline') {
+      loadTimeline();
+    }
+  }
+
+  function buildReplySubject() {
+    const subject = (currentData?.subject || '').trim();
+    if (!subject) return 'Antwort';
+    return /^re:/i.test(subject) ? subject : `Re: ${subject}`;
+  }
+
+  function renderReplyOriginalMessage(item) {
+    const frame = document.getElementById('reply-compose-original-frame');
+    const text = document.getElementById('reply-compose-original-text');
+    const header = document.getElementById('reply-compose-quote-header');
+    if (!frame || !text) return;
+    if (header) {
+      const sender = parseSender(item?.sender || '');
+      const senderLine = sender.name || sender.email || 'Unbekannt';
+      let dateLine = '–';
+      if (item?.received_at) {
+        const dt = new Date(item.received_at);
+        dateLine = dt.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+        const timeLine = dt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        header.textContent = `Am ${dateLine} um ${timeLine} schrieb ${senderLine}:`;
+      } else {
+        header.textContent = `Am ${dateLine} schrieb ${senderLine}:`;
+      }
+    }
+    if (item?.body_html) {
+      text.classList.add('hidden');
+      frame.classList.remove('hidden');
+      const html = item.body_html;
+      const isDocument = /^\s*<!doctype\b|^\s*<html\b/i.test(html);
+      frame.srcdoc = isDocument
+        ? html
+        : `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:12px 14px;font-size:13px;line-height:1.45;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#2b2b2b;word-break:break-word;}</style></head><body>${html}</body></html>`;
+      return;
+    }
+    frame.classList.add('hidden');
+    text.classList.remove('hidden');
+    text.textContent = item?.body_text || '(Kein Originalinhalt verfügbar)';
+  }
+
+  function closeReplyCompose(reset = false) {
+    setReplyMode(false);
+    if (reset) {
+      const body = document.getElementById('reply-compose-body');
+      if (body) body.value = '';
+    }
+    requestPreviewHeightSync();
+  }
+
+  function openReplyCompose() {
+    if (!triageReplyEnabled) return;
+    if (!currentItemId || !currentData) return;
+    closeForwardDrawer();
+    closeDetailsDrawer();
+    switchTab('overview');
+    const body = document.getElementById('reply-compose-body');
+    if (!body) return;
+    setReplyMode(true);
+    body.value = '';
+    renderReplyOriginalMessage(currentData);
+    body.focus();
+  }
+
+  async function submitReplyCompose() {
+    if (!triageReplyEnabled) return;
+    if (!currentItemId) return;
+    const bodyInput = document.getElementById('reply-compose-body');
+    const sendBtn = document.getElementById('reply-compose-send');
+    const fullBody = (bodyInput?.value || '').trim();
+    if (!fullBody) {
+      showToast('Bitte Antworttext eingeben.', false);
+      return;
+    }
+    try {
+      if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.textContent = 'Sende ...';
+      }
+      const updated = await api(`/api/mail-items/${currentItemId}/forward`, 'POST', {
+        target_type: 'reply',
+        after_status: 'beantwortet',
+        message_subject: buildReplySubject(),
+        message_body: fullBody,
+      });
+      closeReplyCompose(true);
+      showToast('Antwort gespeichert ✓');
+      if (!queueMatchesItem(updated)) {
+        removeCurrentRowAndAdvance();
+      } else {
+        renderWorkspace(updated);
+      }
+      refreshAllCounts();
+    } catch {
+      showToast('Antwort fehlgeschlagen.', false);
+    } finally {
+      if (sendBtn) {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Antwort senden';
+      }
+    }
+  }
+
+  async function selectEmail(id, row) {
+    currentItemId = id;
+    setActiveRow(row);
+    try {
+      const item = await api(`/api/mail-items/${id}`);
+      renderWorkspace(item);
+    } catch (error) {
+      showToast('E-Mail konnte nicht geladen werden.', false);
+    }
+  }
+
+  function hideWorkspace() {
+    currentItemId = null;
+    currentData = null;
+    document.getElementById('workspace').classList.add('hidden');
+    document.getElementById('workspace-empty').classList.remove('hidden');
+    closeReplyCompose(true);
+    closeDetailsDrawer();
+    closeForwardDrawer();
+  }
+
+  function removeCurrentRowAndAdvance() {
+    const currentRow = document.querySelector(`.queue-row[data-id="${currentItemId}"]`);
+    if (!currentRow) {
+      hideWorkspace();
+      return;
+    }
+    const next = currentRow.nextElementSibling && currentRow.nextElementSibling.classList.contains('queue-row')
+      ? currentRow.nextElementSibling
+      : (currentRow.previousElementSibling && currentRow.previousElementSibling.classList.contains('queue-row')
+        ? currentRow.previousElementSibling
+        : null);
+
+    currentRow.remove();
+    if (next) {
+      selectEmail(Number(next.dataset.id), next);
+      return;
+    }
+    hideWorkspace();
+  }
+
+  async function patchCurrent(patch, successMessage) {
+    if (!currentItemId) return;
+    try {
+      const updated = await api(`/api/mail-items/${currentItemId}`, 'PATCH', patch);
+      if (!queueMatchesItem(updated)) {
+        showToast(successMessage || 'Gespeichert ✓');
+        removeCurrentRowAndAdvance();
+        refreshAllCounts();
+        return;
+      }
+      renderWorkspace(updated);
+      showToast(successMessage || 'Gespeichert ✓');
+      refreshAllCounts();
+    } catch (error) {
+      showToast('Aktion konnte nicht gespeichert werden.', false);
+    }
+  }
+
+  async function closeCurrent() {
+    if (!currentItemId) return;
+    try {
+      const updated = await api(`/api/mail-items/${currentItemId}/close`, 'POST', {});
+      showToast('Vorgang abgeschlossen ✓');
+      if (!queueMatchesItem(updated)) {
+        removeCurrentRowAndAdvance();
+      } else {
+        renderWorkspace(updated);
+      }
+      refreshAllCounts();
+    } catch {
+      showToast('Fehler beim Abschließen.', false);
+    }
+  }
+
+  async function markSpamCurrent() {
+    if (!currentItemId) return;
+    try {
+      const updated = await api(`/api/mail-items/${currentItemId}/spam`, 'POST', {});
+      showToast('Nachricht als Spam markiert ✓');
+      if (!queueMatchesItem(updated)) {
+        removeCurrentRowAndAdvance();
+      } else {
+        renderWorkspace(updated);
+      }
+      refreshAllCounts();
+    } catch {
+      showToast('Spam-Markierung fehlgeschlagen.', false);
+    }
+  }
+
+  function switchTab(tabName) {
+    currentTab = tabName;
+    document.querySelectorAll('.workspace-tab').forEach((button) => {
+      const active = button.dataset.tab === tabName;
+      button.className = `workspace-tab px-2.5 py-2 text-[0.8125rem] font-medium border-b-2 ${active ? 'is-active' : 'border-transparent text-ink2 hover:text-ink hover:border-line'}`;
+    });
+    document.querySelectorAll('.workspace-panel').forEach((panel) => {
+      const active = panel.dataset.panel === tabName;
+      // overview panel uses flex; others use block
+      panel.style.display = active ? (panel.dataset.panel === 'overview' ? 'flex' : 'block') : 'none';
+    });
+    if (tabName === 'timeline' && currentItemId) {
+      loadTimeline();
+    }
+    if (tabName === 'overview') {
+      requestPreviewHeightSync();
+    }
+  }
+
+  function formatTimelineAction(event) {
+    const actionLabels = {
+      assigned: 'Zugewiesen',
+      unassigned: 'Zuweisung entfernt',
+      status_changed: 'Status geändert',
+      category_changed: 'Kategorie geändert',
+      note_saved: 'Notiz gespeichert',
+      forwarded: 'Weitergeleitet',
+      replied: 'Beantwortet',
+      closed: 'Abgeschlossen',
+      spam_marked: 'Als Spam markiert',
+    };
+    const label = actionLabels[event.action] || event.action;
+
+    if (event.action === 'status_changed' && event.after_json) {
+      const beforeStatus = event.before_json?.status ? (statusMeta[event.before_json.status]?.label || event.before_json.status) : null;
+      const afterStatus = event.after_json?.status ? (statusMeta[event.after_json.status]?.label || event.after_json.status) : null;
+      if (beforeStatus || afterStatus) {
+        return `${label}: ${beforeStatus || '–'} → ${afterStatus || '–'}`;
+      }
+    }
+    if (event.action === 'assigned' || event.action === 'unassigned') {
+      const nextAssigneeId = event.after_json?.assigned_to_user_id;
+      const nextAssignee = nextAssigneeId && assigneeMap[nextAssigneeId] ? assigneeMap[nextAssigneeId].display_name : 'Nicht zugewiesen';
+      return `${label}: ${nextAssignee}`;
+    }
+    if (event.action === 'category_changed') {
+      const nextCategoryId = event.after_json?.category_id;
+      const nextCategory = nextCategoryId && categoryMap[nextCategoryId] ? categoryMap[nextCategoryId] : 'Keine';
+      return `${label}: ${nextCategory}`;
+    }
+    return label;
+  }
+
+  function timelineIconSvg(action) {
+    const icons = {
+      assigned: '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/>',
+      unassigned: '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/>',
+      category_changed: '<path d="M20.59 13.41 11 3H4a1 1 0 0 0-1 1v7l10.59 9.59a2 2 0 0 0 2.82 0l4.18-4.18a2 2 0 0 0 0-2.82Z"/><path d="M7 7h.01"/>',
+      note_saved: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+      forwarded: '<path d="M15 14l5-5-5-5"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/>',
+      replied: '<path d="M9 10 4 15l5 5"/><path d="M4 15h11a4 4 0 0 0 0-8h-1"/>',
+      closed: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/>',
+      spam_marked: '<path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/>',
+    };
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[action] || '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'}</svg>`;
+  }
+
+  async function loadTimeline() {
+    if (!currentItemId) return;
+    const list = document.getElementById('timeline-list');
+    list.innerHTML = '<p class="text-xs text-muted m-0">Lade Verlauf …</p>';
+    try {
+      const events = await api(`/api/mail-items/${currentItemId}/timeline`);
+      if (!events.length) {
+        list.innerHTML = '<p class="text-sm text-muted m-0">Noch keine Verlaufseinträge vorhanden.</p>';
+        return;
+      }
+      list.innerHTML = events.map((event, index) => {
+        const actor = event.actor_display_name || (event.actor_user_id ? `Benutzer #${event.actor_user_id}` : 'System');
+        const last = index === events.length - 1;
+        return `
+          <div class="timeline-event">
+            <div class="timeline-marker">
+              <div class="timeline-dot-icon">${timelineIconSvg(event.action)}</div>
+              ${last ? '' : '<div class="timeline-line"></div>'}
+            </div>
+            <div style="padding-bottom:${last ? '0' : '16px'};">
+              <p class="timeline-title">${esc(formatTimelineAction(event))}</p>
+              <p class="timeline-meta">${esc(actor)} · ${esc(formatDateTime(event.created_at))}</p>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch {
+      list.innerHTML = '<p class="text-sm text-err m-0">Verlauf konnte nicht geladen werden.</p>';
+    }
+  }
+
+  function toggleMoreMenu(force = null) {
+    const menu = document.getElementById('more-menu');
+    if (!menu) return;
+    const nextState = force === null ? menu.classList.contains('hidden') : force;
+    menu.classList.toggle('hidden', !nextState);
+  }
+
+  function openForwardDrawer(mode = 'forward') {
+    if (!currentItemId) return;
+    closeDetailsDrawer();
+    forwardAction = triageReplyEnabled && mode === 'reply' ? 'reply' : 'forward';
+    forwardTab = 'route';
+    selectedForwardRouteId = null;
+    document.getElementById('forward-note').value = '';
+    document.getElementById('forward-user').value = '';
+    document.getElementById('forward-template').innerHTML = '<option value="">Keine Vorlage</option>';
+    refreshForwardActionUI();
+    switchForwardTab('route');
+    const drawer = document.getElementById('forward-drawer');
+    drawer.style.position = 'fixed';
+    drawer.style.height = '100vh';
+    drawer.style.width = '420px';
+    const scrim = document.getElementById('drawer-scrim');
+    scrim.style.display = 'block';
+    requestAnimationFrame(() => { scrim.style.opacity = '1'; });
+    loadForwardRoutes();
+  }
+
+  function openDetailsDrawer() {
+    if (!currentItemId) return;
+    const drawer = document.getElementById('details-drawer');
+    if (!drawer) return;
+    closeForwardDrawer();
+    drawer.style.position = 'fixed';
+    drawer.style.height = '100vh';
+    drawer.style.width = '360px';
+    const scrim = document.getElementById('drawer-scrim');
+    scrim.style.display = 'block';
+    requestAnimationFrame(() => {
+      scrim.style.opacity = '1';
+      document.getElementById('ctrl-assignee')?.focus();
+    });
+  }
+
+  function closeDetailsDrawer() {
+    const drawer = document.getElementById('details-drawer');
+    if (!drawer) return;
+    drawer.style.width = '0';
+    drawer.style.position = '';
+    drawer.style.height = '';
+    const scrim = document.getElementById('drawer-scrim');
+    if (scrim) {
+      scrim.style.opacity = '0';
+      clearTimeout(scrimTimer);
+      scrimTimer = setTimeout(() => { scrim.style.display = 'none'; }, 200);
+    }
+  }
+
+  function closeForwardDrawer() {
+    const drawer = document.getElementById('forward-drawer');
+    drawer.style.width = '0';
+    drawer.style.position = '';
+    drawer.style.height = '';
+    selectedForwardRouteId = null;
+    forwardAction = 'forward';
+    document.getElementById('forward-note').value = '';
+    document.getElementById('forward-subject').value = '';
+    document.getElementById('forward-body').value = '';
+    document.getElementById('forward-template').value = '';
+    document.getElementById('forward-user').value = '';
+    const scrim = document.getElementById('drawer-scrim');
+    if (scrim) {
+      scrim.style.opacity = '0';
+      clearTimeout(scrimTimer);
+      scrimTimer = setTimeout(() => { scrim.style.display = 'none'; }, 200);
+    }
+  }
+
+  async function loadForwardRoutes() {
+    const loading = document.getElementById('forward-routes-loading');
+    const list = document.getElementById('forward-routes');
+    loading.style.display = '';
+    list.innerHTML = '';
+    try {
+      forwardRoutes = await api('/api/forwarding-routes');
+      loading.style.display = 'none';
+      if (!forwardRoutes.length) {
+        list.innerHTML = '<p class="text-xs text-muted">Keine Weiterleitungsziele konfiguriert.</p>';
+        return;
+      }
+      list.innerHTML = forwardRoutes.map((route) => {
+        return `
+          <button type="button" data-route-id="${route.id}" class="forward-route w-full text-left px-2.5 py-1.5 rounded-lg border border-line text-[0.8125rem] text-ink hover:bg-app">
+            <span class="font-medium">${esc(route.name)}</span>
+            ${route.description ? `<span class="block text-[0.72rem] text-muted mt-0.5">${esc(route.description)}</span>` : ''}
+          </button>
+        `;
+      }).join('');
+
+      list.querySelectorAll('.forward-route').forEach((button) => {
+        button.addEventListener('click', () => {
+          selectedForwardRouteId = Number(button.dataset.routeId);
+          list.querySelectorAll('.forward-route').forEach((other) => {
+            other.style.background = '';
+            other.style.borderColor = '';
+          });
+          button.style.background = '#EAF1EB';
+          button.style.borderColor = '#4E6B57';
+          refreshForwardTemplateSelect();
+        });
+      });
+      if (forwardRoutes.length && !selectedForwardRouteId) {
+        const first = list.querySelector('.forward-route');
+        if (first) first.click();
+      }
+    } catch {
+      loading.style.display = 'none';
+      list.innerHTML = '<p class="text-xs text-err">Weiterleitungsziele konnten nicht geladen werden.</p>';
+    }
+  }
+
+  function refreshForwardTemplateSelect() {
+    const wrap = document.getElementById('forward-template-wrap');
+    const select = document.getElementById('forward-template');
+    if (forwardAction !== 'forward' || forwardTab !== 'route' || !selectedForwardRouteId) {
+      wrap.style.display = 'none';
+      select.innerHTML = '<option value="">Keine Vorlage</option>';
+      applyForwardTemplateToCompose();
+      return;
+    }
+    const route = forwardRoutes.find((entry) => entry.id === selectedForwardRouteId);
+    const templates = (route?.templates || []).filter((entry) => entry.is_active);
+    if (!templates.length) {
+      wrap.style.display = 'none';
+      select.innerHTML = '<option value="">Keine Vorlage</option>';
+      applyForwardTemplateToCompose();
+      return;
+    }
+    wrap.style.display = '';
+    select.innerHTML = '<option value="">Keine Vorlage</option>' + templates.map((template) => {
+      return `<option value="${template.id}" ${template.is_default ? 'selected' : ''}>${esc(template.name)}</option>`;
+    }).join('');
+    applyForwardTemplateToCompose();
+  }
+
+  function getForwardContext() {
+    const item = currentData || {};
+    const subject = item.subject || '';
+    const sender = item.sender || '';
+    const receivedAt = item.received_at ? new Date(item.received_at) : null;
+    const dateText = receivedAt && !Number.isNaN(receivedAt.getTime())
+      ? receivedAt.toLocaleString('de-DE')
+      : '';
+    const bodyText = item.body_text || '';
+    return { subject, sender, dateText, bodyText };
+  }
+
+  function renderTemplateWithContext(templateText) {
+    const ctx = getForwardContext();
+    const quoted = [
+      '-------- Weitergeleitete Nachricht --------',
+      `Betreff:\t${ctx.subject}`,
+      `Datum:\t${ctx.dateText}`,
+      `Von:\t${ctx.sender}`,
+      '',
+      '',
+      ctx.bodyText,
+    ].join('\n');
+    return String(templateText || '')
+      .replaceAll('{betreff}', ctx.subject)
+      .replaceAll('{absender}', ctx.sender)
+      .replaceAll('{datum}', ctx.dateText)
+      .replaceAll('{inhalt}', quoted);
+  }
+
+  function getSelectedTemplate() {
+    if (!selectedForwardRouteId) return null;
+    const route = forwardRoutes.find((entry) => entry.id === selectedForwardRouteId);
+    if (!route) return null;
+    const selectedId = Number(document.getElementById('forward-template').value || '');
+    if (!selectedId) return null;
+    return (route.templates || []).find((tpl) => tpl.id === selectedId) || null;
+  }
+
+  function applyForwardTemplateToCompose() {
+    if (forwardAction !== 'forward') return;
+    const subjectInput = document.getElementById('forward-subject');
+    const bodyInput = document.getElementById('forward-body');
+    if (forwardTab !== 'route') {
+      const ctx = getForwardContext();
+      subjectInput.value = ctx.subject ? `Weiterleitung: ${ctx.subject}` : 'Weiterleitung';
+      bodyInput.value = '';
+      return;
+    }
+    const tpl = getSelectedTemplate();
+    if (tpl) {
+      subjectInput.value = renderTemplateWithContext(tpl.subject_template);
+      bodyInput.value = renderTemplateWithContext(tpl.body_template);
+      return;
+    }
+    const ctx = getForwardContext();
+    subjectInput.value = ctx.subject ? `Weiterleitung: ${ctx.subject}` : 'Weiterleitung';
+    bodyInput.value = renderTemplateWithContext('{inhalt}');
+  }
+
+  function applyReplyDefaults() {
+    const subjectInput = document.getElementById('forward-subject');
+    const bodyInput = document.getElementById('forward-body');
+    const senderRaw = (currentData?.sender || '').trim();
+    subjectInput.value = currentData?.subject ? `Antwort: ${currentData.subject}` : 'Antwort';
+    bodyInput.value = '';
+    document.getElementById('reply-target-email').textContent = senderRaw || 'Keine Absenderadresse erkannt';
+  }
+
+  function refreshForwardActionUI() {
+    document.querySelectorAll('.forward-action-tab').forEach((button) => {
+      const active = button.dataset.forwardAction === forwardAction;
+      button.className = `forward-action-tab px-3 py-2 text-xs font-medium border-b-2 ${active ? 'border-brand text-brand' : 'border-transparent text-ink2'}`;
+    });
+    const replyMode = forwardAction === 'reply';
+    document.getElementById('reply-target-info').classList.toggle('hidden', !replyMode);
+    document.getElementById('forward-target-tabs').classList.toggle('hidden', replyMode);
+    document.getElementById('forward-panel-route').classList.toggle('hidden', replyMode || forwardTab !== 'route');
+    document.getElementById('forward-panel-person').classList.toggle('hidden', replyMode || forwardTab !== 'person');
+    document.getElementById('forward-status-label').textContent = 'Status nach Versand';
+    const statusSelect = document.getElementById('forward-status');
+    statusSelect.value = replyMode ? 'beantwortet' : 'weitergeleitet';
+    if (replyMode) {
+      document.getElementById('forward-template-wrap').style.display = 'none';
+      applyReplyDefaults();
+    } else {
+      refreshForwardTemplateSelect();
+      applyForwardTemplateToCompose();
+    }
+  }
+
+  function switchForwardAction(nextAction) {
+    forwardAction = nextAction;
+    refreshForwardActionUI();
+  }
+
+  function switchForwardTab(nextTab) {
+    forwardTab = nextTab;
+    document.querySelectorAll('.forward-tab').forEach((button) => {
+      const active = button.dataset.forwardTab === nextTab;
+      button.className = `forward-tab px-3 py-2 text-xs font-medium border-b-2 ${active ? 'border-brand text-brand' : 'border-transparent text-ink2'}`;
+    });
+    document.getElementById('forward-panel-route').classList.toggle('hidden', nextTab !== 'route');
+    document.getElementById('forward-panel-person').classList.toggle('hidden', nextTab !== 'person');
+    refreshForwardTemplateSelect();
+    if (nextTab === 'person') {
+      document.getElementById('forward-template-wrap').style.display = 'none';
+      applyForwardTemplateToCompose();
+    }
+  }
+
+  async function submitForward() {
+    if (!currentItemId) return;
+
+    const note = document.getElementById('forward-note').value.trim() || null;
+    const afterStatus = document.getElementById('forward-status').value;
+    const templateValue = document.getElementById('forward-template').value;
+    const templateId = templateValue ? Number(templateValue) : null;
+    const messageSubject = document.getElementById('forward-subject').value.trim();
+    const messageBody = document.getElementById('forward-body').value.trim();
+
+    let payload = null;
+    if (forwardAction === 'reply') {
+      if (!triageReplyEnabled) {
+        showToast('Antworten sind im Triage-Postfach deaktiviert.', false);
+        return;
+      }
+      payload = {
+        target_type: 'reply',
+        note,
+        after_status: afterStatus,
+        message_subject: messageSubject || null,
+        message_body: messageBody || null,
+      };
+    } else if (forwardTab === 'route') {
+      if (!selectedForwardRouteId) {
+        showToast('Bitte ein Weiterleitungsziel auswählen.', false);
+        return;
+      }
+      payload = {
+        target_type: 'route',
+        route_id: selectedForwardRouteId,
+        template_id: templateId,
+        note,
+        after_status: afterStatus,
+        message_subject: messageSubject || null,
+        message_body: messageBody || null,
+      };
+    } else {
+      const userId = document.getElementById('forward-user').value;
+      if (userId) {
+        payload = {
+          target_type: 'user',
+          user_id: Number(userId),
+          note,
+          after_status: afterStatus,
+          message_subject: messageSubject || null,
+          message_body: messageBody || null,
+        };
+      } else {
+        showToast('Bitte Benutzer auswählen.', false);
+        return;
+      }
+    }
+
+    try {
+      const actionUsed = forwardAction;
+      const updated = await api(`/api/mail-items/${currentItemId}/forward`, 'POST', payload);
+      closeForwardDrawer();
+      showToast(actionUsed === 'reply' ? 'Antwort gespeichert ✓' : 'Weiterleitung gespeichert ✓');
+      if (!queueMatchesItem(updated)) {
+        removeCurrentRowAndAdvance();
+      } else {
+        renderWorkspace(updated);
+      }
+      refreshAllCounts();
+    } catch {
+      showToast('Senden fehlgeschlagen.', false);
+    }
+  }
+
+  function bindWorkspaceEvents() {
+    document.querySelectorAll('.queue-row').forEach((row) => {
+      row.addEventListener('click', () => {
+        selectEmail(Number(row.dataset.id), row);
+      });
+    });
+
+    const subjectEl = document.getElementById('ws-subject');
+    if (subjectEl) {
+      subjectEl.style.cursor = 'pointer';
+      subjectEl.addEventListener('click', () => {
+        const expanded = subjectEl.dataset.expanded === 'true';
+        subjectEl.style.webkitLineClamp = expanded ? '2' : 'unset';
+        subjectEl.dataset.expanded = String(!expanded);
+      });
+    }
+
+    document.getElementById('btn-close').addEventListener('click', closeCurrent);
+    document.getElementById('btn-forward').addEventListener('click', () => {
+      closeReplyCompose();
+      openForwardDrawer('forward');
+    });
+      document.getElementById('btn-reply')?.addEventListener('click', () => {
+        openReplyCompose();
+      });
+
+    document.getElementById('btn-timeline').addEventListener('click', () => {
+      switchTab(currentTab === 'timeline' ? 'overview' : 'timeline');
+    });
+    const btnDetails = document.getElementById('btn-details');
+    if (btnDetails) {
+      btnDetails.addEventListener('click', openDetailsDrawer);
+    }
+    const btnAssign = document.getElementById('btn-assign');
+    const assignMenu = document.getElementById('assign-menu');
+    const assignWrap = document.getElementById('assign-menu-wrap');
+    if (btnAssign && assignMenu && assignWrap) {
+      btnAssign.addEventListener('click', (event) => {
+        event.stopPropagation();
+        assignMenu.classList.toggle('hidden');
+      });
+      assignMenu.querySelectorAll('.assign-option').forEach((option) => {
+        option.addEventListener('click', () => {
+          assignMenu.classList.add('hidden');
+          const value = option.dataset.userId ? Number(option.dataset.userId) : null;
+          patchCurrent({ assigned_to_user_id: value }, 'Zuständigkeit gespeichert ✓');
+        });
+      });
+      document.addEventListener('click', (event) => {
+        if (!assignWrap.contains(event.target)) assignMenu.classList.add('hidden');
+      });
+    }
+    const btnCategoryAssign = document.getElementById('btn-category-assign');
+    const categoryAssignMenu = document.getElementById('category-assign-menu');
+    const categoryAssignWrap = document.getElementById('category-assign-wrap');
+    if (btnCategoryAssign && categoryAssignMenu && categoryAssignWrap) {
+      btnCategoryAssign.addEventListener('click', (event) => {
+        event.stopPropagation();
+        categoryAssignMenu.classList.toggle('hidden');
+      });
+      categoryAssignMenu.addEventListener('click', (event) => {
+        const option = event.target.closest('.category-assign-option');
+        if (!option) return;
+        const value = option.dataset.categoryId ? Number(option.dataset.categoryId) : null;
+        categoryAssignMenu.classList.add('hidden');
+        patchCurrent({ category_id: value }, 'Kategorie gespeichert ✓');
+      });
+      document.getElementById('category-assign-refresh')?.addEventListener('click', () => {
+        refreshCategories();
+      });
+      document.getElementById('category-assign-add')?.addEventListener('click', () => {
+        openCategoryModal();
+      });
+      document.addEventListener('click', (event) => {
+        if (!categoryAssignWrap.contains(event.target)) categoryAssignMenu.classList.add('hidden');
+      });
+    }
+    const replyComposeSend = document.getElementById('reply-compose-send');
+    if (replyComposeSend) {
+      replyComposeSend.addEventListener('click', submitReplyCompose);
+    }
+    const replyComposeCancel = document.getElementById('reply-compose-cancel');
+    if (replyComposeCancel) {
+      replyComposeCancel.addEventListener('click', () => closeReplyCompose(true));
+    }
+    const replyComposeNote = document.getElementById('reply-compose-note');
+    if (replyComposeNote) {
+      replyComposeNote.addEventListener('click', openNoteModal);
+    }
+
+    document.getElementById('ctrl-assignee').addEventListener('change', (event) => {
+      const value = event.target.value ? Number(event.target.value) : null;
+      patchCurrent({ assigned_to_user_id: value }, 'Zuständigkeit gespeichert ✓');
+    });
+
+    document.getElementById('ctrl-category').addEventListener('change', (event) => {
+      const value = event.target.value ? Number(event.target.value) : null;
+      patchCurrent({ category_id: value }, 'Kategorie gespeichert ✓');
+    });
+    document.getElementById('category-filter-select').addEventListener('change', () => {
+      document.getElementById('queue-control-form').requestSubmit();
+    });
+    document.getElementById('btn-category-refresh').addEventListener('click', () => {
+      refreshCategories();
+    });
+    document.getElementById('btn-category-add').addEventListener('click', () => {
+      openCategoryModal();
+    });
+    document.querySelectorAll('[data-category-close]').forEach((button) => {
+      button.addEventListener('click', closeCategoryModal);
+    });
+    document.getElementById('category-modal-close').addEventListener('click', closeCategoryModal);
+    document.getElementById('category-create-form').addEventListener('submit', submitCategoryCreate);
+
+    document.getElementById('ctrl-status').addEventListener('change', (event) => {
+      patchCurrent({ status: event.target.value }, 'Status gespeichert ✓');
+    });
+
+    document.getElementById('notes-save').addEventListener('click', async () => {
+      const input = document.getElementById('notes-input');
+      const body = (input?.value || '').trim();
+      if (!body) {
+        showToast('Bitte Notiztext eingeben.', false);
+        return;
+      }
+      const ok = await saveNote(body);
+      if (ok && input) input.value = '';
+    });
+
+    document.getElementById('queue-search-toggle')?.addEventListener('click', openQueueSearch);
+    document.getElementById('queue-search-close')?.addEventListener('click', closeQueueSearch);
+    document.getElementById('queue-search-backdrop')?.addEventListener('click', closeQueueSearch);
+    window.addEventListener('resize', positionQueueSearchOverlay);
+
+    document.getElementById('note-modal-save')?.addEventListener('click', saveNoteModal);
+    document.querySelectorAll('[data-note-close]').forEach((button) => {
+      button.addEventListener('click', closeNoteModal);
+    });
+    document.getElementById('note-modal-close')?.addEventListener('click', closeNoteModal);
+
+    document.querySelectorAll('.workspace-tab').forEach((button) => {
+      button.addEventListener('click', () => {
+        switchTab(button.dataset.tab);
+      });
+    });
+
+    document.getElementById('btn-more').addEventListener('click', () => {
+      const menu = document.getElementById('more-menu');
+      const isHidden = menu.classList.contains('hidden');
+      menu.classList.toggle('hidden', !isHidden);
+    });
+
+    document.querySelectorAll('.more-action').forEach((button) => {
+      button.addEventListener('click', () => {
+        document.getElementById('more-menu').classList.add('hidden');
+        if (button.dataset.moreAction === 'spam') {
+          markSpamCurrent();
+          return;
+        }
+        showToast('Aktion ist als Platzhalter vorgesehen und noch nicht implementiert.', false);
+      });
+    });
+
+    document.addEventListener('click', (event) => {
+      const moreWrap = document.getElementById('more-menu-wrap');
+      if (!moreWrap.contains(event.target)) {
+        document.getElementById('more-menu').classList.add('hidden');
+      }
+    });
+
+    document.getElementById('forward-close').addEventListener('click', closeForwardDrawer);
+    document.getElementById('forward-cancel').addEventListener('click', closeForwardDrawer);
+    document.getElementById('forward-submit').addEventListener('click', submitForward);
+    document.getElementById('details-close')?.addEventListener('click', closeDetailsDrawer);
+    document.getElementById('drawer-scrim').addEventListener('click', () => {
+      closeDetailsDrawer();
+      closeForwardDrawer();
+    });
+
+    document.querySelectorAll('.forward-tab').forEach((button) => {
+      button.addEventListener('click', () => switchForwardTab(button.dataset.forwardTab));
+    });
+    document.querySelectorAll('.forward-action-tab').forEach((button) => {
+      button.addEventListener('click', () => switchForwardAction(button.dataset.forwardAction));
+    });
+    document.getElementById('forward-template').addEventListener('change', applyForwardTemplateToCompose);
+
+    document.getElementById('assigned-filter-select')?.addEventListener('change', () => {
+      document.getElementById('queue-control-form')?.requestSubmit();
+    });
+
+    document.addEventListener('keydown', (event) => {
+      const targetTag = event.target?.tagName || '';
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(targetTag)) return;
+
+      const activeRow = document.querySelector(`.queue-row[data-id="${currentItemId}"]`);
+
+      if (event.key === 'ArrowDown' || event.key === 'j') {
+        const next = activeRow?.nextElementSibling;
+        if (next?.classList.contains('queue-row')) {
+          selectEmail(Number(next.dataset.id), next);
+          event.preventDefault();
+        }
+      }
+
+      if (event.key === 'ArrowUp' || event.key === 'k') {
+        const prev = activeRow?.previousElementSibling;
+        if (prev?.classList.contains('queue-row')) {
+          selectEmail(Number(prev.dataset.id), prev);
+          event.preventDefault();
+        }
+      }
+
+      if (event.key === 'e') {
+        closeCurrent();
+      }
+
+      if (event.key === 'n') {
+        openNoteModal();
+      }
+
+      if (event.key === 'Escape') {
+        closeCategoryModal();
+        closeNoteModal();
+        closeQueueSearch();
+        document.getElementById('more-menu').classList.add('hidden');
+        closeDetailsDrawer();
+        closeForwardDrawer();
+      }
+    });
+  }
+
+  function selectInitialItem() {
+    const rows = Array.from(document.querySelectorAll('.queue-row'));
+    if (!rows.length) {
+      hideWorkspace();
+      return;
+    }
+
+    let initialRow = null;
+    if (selectedIdFromQuery != null) {
+      initialRow = document.querySelector(`.queue-row[data-id="${selectedIdFromQuery}"]`);
+    }
+    if (!initialRow) {
+      initialRow = document.querySelector('.queue-row.is-selected') || rows[0];
+    }
+    if (initialRow) {
+      initialRow.scrollIntoView({ block: 'nearest' });
+      selectEmail(Number(initialRow.dataset.id), initialRow);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    categoriesState = sortedCategories(categoriesState);
+    syncCategoryMap();
+    renderCategorySelects();
+    renderCategoryAssignMenu();
+    updateCategoryAssignButton(null);
+    bindWorkspaceEvents();
+    switchTab('overview');
+    switchForwardTab('route');
+    selectInitialItem();
+    window.addEventListener('resize', requestPreviewHeightSync);
+  });
+
+</script>
+{% endblock %}

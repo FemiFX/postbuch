@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Zu prüfen</h1>
+    <p class="page-subtitle">Alle neuen oder unvollständigen Vorgänge, die geprüft oder bearbeitet werden müssen.</p>
+  </div>
+</div>
+
+<!-- Status tabs -->
+<div class="flex gap-1 mb-5 border-b border-line">
+  <a href="/review?channel={{ channel_filter }}"
+     class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px
+            {% if not status_filter or status_filter == 'neu' %}border-brand text-brand{% else %}border-transparent text-ink2 hover:text-ink hover:border-line-d{% endif %}">
+    Neu
+    {% if nav_triage_count %}<span class="ml-1.5 text-[0.6rem] font-bold px-1.5 py-0.5 rounded-full bg-warn text-white">{{ nav_triage_count }}</span>{% endif %}
+  </a>
+  {% for val, label in [("in_bearbeitung", "In Bearbeitung"), ("wartet_aktion", "Wartet"), ("geschlossen", "Abgeschlossen")] %}
+  <a href="/review?status_filter={{ val }}&channel={{ channel_filter }}"
+     class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px
+            {% if status_filter == val %}border-brand text-brand{% else %}border-transparent text-ink2 hover:text-ink hover:border-line-d{% endif %}">
+    {{ label }}
+  </a>
+  {% endfor %}
+</div>
+
+<div class="flex gap-2 mb-5">
+  {% for val, label in [("all", "Alle Kanäle"), ("email", "E-Mail"), ("paper_incoming", "Papier Eingang"), ("paper_outgoing", "Papier Ausgang")] %}
+  <a href="/review?status_filter={{ status_filter }}&channel={{ val }}"
+     class="btn-ghost-sm {% if channel_filter == val %}border-brand text-brand{% endif %}">
+    {{ label }}
+  </a>
+  {% endfor %}
+</div>
+
+<!-- Table -->
+<div class="card mb-0">
+  <table class="w-full border-collapse text-sm">
+    <thead>
+      <tr class="border-b border-line">
+        <th class="table-th whitespace-nowrap">Eingangskanal</th>
+        <th class="table-th">Betreff / Titel</th>
+        <th class="table-th">Absender / Quelle</th>
+        <th class="table-th">Eingegangen am</th>
+        <th class="table-th">Status</th>
+        <th class="table-th">Aktion</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr class="table-row cursor-pointer" onclick="window.location='{{ item.href }}'">
+        <td class="table-td">
+          <span class="chip {{ item.channel_chip }} whitespace-nowrap">{{ item.channel_label }}</span>
+        </td>
+        <td class="table-td">
+          <a href="{{ item.href }}" class="font-medium text-ink hover:text-brand">{{ item.title }}</a>
+        </td>
+        <td class="table-td text-ink2 text-xs">{{ item.source }}</td>
+        <td class="table-td text-muted text-xs whitespace-nowrap">
+          {% if item.channel == "email" %}
+          {{ item.received_at.strftime('%d.%m.%Y %H:%M') if item.received_at else '–' }}
+          {% else %}
+          {{ item.entry_date.strftime('%d.%m.%Y') if item.entry_date else '–' }}
+          {% endif %}
+        </td>
+        <td class="table-td">
+          {% if item.status == "neu" %}
+          <span class="chip chip-neu">Offen</span>
+          {% elif item.status == "in_bearbeitung" %}
+          <span class="chip chip-progress">In Bearbeitung</span>
+          {% elif item.status == "wartet_aktion" %}
+          <span class="chip chip-pending">Wartet</span>
+          {% elif item.status in ["geschlossen", "erledigt"] %}
+          <span class="chip chip-neutral">Abgeschlossen</span>
+          {% elif item.status == "spam" %}
+          <span class="chip chip-duplicate">Spam</span>
+          {% else %}
+          <span class="chip chip-neutral">{{ item.status }}</span>
+          {% endif %}
+        </td>
+        <td class="table-td">
+          <a href="{{ item.href }}" class="btn-ghost-sm">Prüfen</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6" class="px-4 py-12 text-center">
+          <div class="flex flex-col items-center gap-2">
+            <svg class="text-ok" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            <p class="text-sm text-muted m-0">Alles erledigt — keine offenen Vorgänge.</p>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

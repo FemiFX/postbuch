@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Regeln</h1>
+    <p class="page-subtitle">Logik konfigurieren, die Benutzerentscheidungen mit Systemaktionen verbindet.</p>
+  </div>
+  <button class="btn" disabled>Neue Regel</button>
+</div>
+
+<div class="card mb-0">
+  <div class="card-body py-14 text-center">
+    <div class="flex flex-col items-center gap-3">
+      <div class="w-12 h-12 rounded-full bg-brand-s flex items-center justify-center">
+        <svg class="text-brand" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+      </div>
+      <div>
+        <p class="text-sm font-medium text-ink m-0">Automatisierungsregeln</p>
+        <p class="text-sm text-muted mt-1 m-0 max-w-sm">Regeln verbinden Trigger und Bedingungen mit automatischen Aktionen wie Weiterleitung oder Statuswechsel.</p>
+        <p class="text-xs text-muted mt-2 m-0">Diese Funktion wird in einem nächsten Schritt implementiert.</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

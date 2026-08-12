@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block content %}
+<meta name="csrf-token" content="{{ csrf_token }}">
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Audit-Log</h1>
+    <p class="page-subtitle">Vollständiger Verlauf aller Systemaktionen und Benutzeraktivitäten.</p>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body py-4">
+    <form method="get" action="/admin/audit" class="grid grid-cols-1 lg:grid-cols-12 gap-3">
+      <div class="lg:col-span-3">
+        <label class="form-label text-xs mb-1">Aktion</label>
+        <select class="form-select w-full" style="height:36px;font-size:.84rem;" name="action">
+          <option value="">Alle Aktionen</option>
+          {% for action in actions %}
+          <option value="{{ action }}" {% if filters.action == action %}selected{% endif %}>{{ action }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="lg:col-span-3">
+        <label class="form-label text-xs mb-1">Benutzer</label>
+        <select class="form-select w-full" style="height:36px;font-size:.84rem;" name="actor_user_id">
+          <option value="">Alle Benutzer</option>
+          {% for u in users %}
+          <option value="{{ u.id }}" {% if filters.actor_user_id == u.id %}selected{% endif %}>{{ u.display_name }} ({{ u.email }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="lg:col-span-2">
+        <label class="form-label text-xs mb-1">Ressourcentyp</label>
+        <select class="form-select w-full" style="height:36px;font-size:.84rem;" name="entity_type">
+          <option value="">Alle</option>
+          {% for et in entity_types %}
+          <option value="{{ et }}" {% if filters.entity_type == et %}selected{% endif %}>{{ et }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="lg:col-span-1">
+        <label class="form-label text-xs mb-1">Von</label>
+        <input class="form-input w-full" style="height:36px;font-size:.84rem;" type="date" name="date_from" value="{{ filters.date_from or '' }}">
+      </div>
+      <div class="lg:col-span-1">
+        <label class="form-label text-xs mb-1">Bis</label>
+        <input class="form-input w-full" style="height:36px;font-size:.84rem;" type="date" name="date_to" value="{{ filters.date_to or '' }}">
+      </div>
+      <div class="lg:col-span-1">
+        <label class="form-label text-xs mb-1">Sortierung</label>
+        <select class="form-select w-full" style="height:36px;font-size:.84rem;" name="sort">
+          <option value="desc" {% if filters.sort == "desc" %}selected{% endif %}>Neueste zuerst</option>
+          <option value="asc" {% if filters.sort == "asc" %}selected{% endif %}>Älteste zuerst</option>
+        </select>
+      </div>
+      <div class="lg:col-span-1 flex items-end gap-2">
+        <button type="submit" class="btn w-full" style="height:36px;padding:0 12px;border-radius:9px;">Filtern</button>
+      </div>
+    </form>
+    <div class="mt-3 flex items-center justify-between gap-3">
+      <a href="/admin/audit" class="text-xs text-ink2 underline">Filter zurücksetzen</a>
+      <a
+        href="/admin/audit/export/csv?action={{ filters.action or '' }}&actor_user_id={{ filters.actor_user_id or '' }}&entity_type={{ filters.entity_type or '' }}&date_from={{ filters.date_from or '' }}&date_to={{ filters.date_to or '' }}&sort={{ filters.sort }}"
+        class="btn-ghost-sm"
+        style="height:32px;padding:0 12px;border-radius:8px;"
+      >CSV exportieren</a>
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:#EAF3F8;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3B6E91" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    </div>
+    <div>
+      <p class="kpi-label">Einträge</p>
+      <p class="kpi-value">{{ stats.total }}</p>
+    </div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:#EAF1EB;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4E6B57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/></svg>
+    </div>
+    <div>
+      <p class="kpi-label">Akteure</p>
+      <p class="kpi-value">{{ stats.unique_actors }}</p>
+    </div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:#F8F1EA;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9C7A4A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    </div>
+    <div>
+      <p class="kpi-label">Aktionsarten</p>
+      <p class="kpi-value">{{ stats.unique_actions }}</p>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-0">
+  <div class="card-header">
+    <h2 class="text-base font-semibold text-ink m-0">Verlauf</h2>
+  </div>
+  <table class="w-full border-collapse text-sm">
+    <thead>
+      <tr class="border-b border-line">
+        <th class="table-th">Zeit</th>
+        <th class="table-th">Akteur</th>
+        <th class="table-th">Aktion</th>
+        <th class="table-th">Ressource</th>
+        <th class="table-th">Beschreibung</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in logs %}
+      <tr class="table-row align-top">
+        <td class="table-td text-ink2 text-xs whitespace-nowrap">
+          {{ log.created_at.strftime('%d.%m.%Y %H:%M:%S') if log.created_at else "—" }}
+        </td>
+        <td class="table-td text-xs">
+          {% set actor = actor_map.get(log.actor_user_id) %}
+          {% if actor %}
+          <div class="font-medium text-ink">{{ actor.display_name }}</div>
+          <div class="text-ink2">{{ actor.email }}</div>
+          {% else %}
+          <span class="chip chip-neutral">System</span>
+          {% endif %}
+        </td>
+        <td class="table-td text-xs">
+          <span class="chip chip-progress">{{ log.action }}</span>
+        </td>
+        <td class="table-td text-xs text-ink2">
+          {% if log.entity_type %}{{ log.entity_type }}{% if log.entity_id %} #{{ log.entity_id }}{% endif %}{% else %}—{% endif %}
+        </td>
+        <td class="table-td text-xs">
+          {% if log.before_json or log.after_json %}
+          <details>
+            <summary class="cursor-pointer text-ink2">Details anzeigen</summary>
+            <div class="mt-2 grid grid-cols-1 lg:grid-cols-2 gap-2">
+              <div>
+                <div class="text-[11px] uppercase text-muted mb-1">Vorher</div>
+                <pre class="text-[11px] bg-paper2 rounded p-2 overflow-auto max-h-48">{{ log.before_json | tojson(indent=2) if log.before_json else '—' }}</pre>
+              </div>
+              <div>
+                <div class="text-[11px] uppercase text-muted mb-1">Nachher</div>
+                <pre class="text-[11px] bg-paper2 rounded p-2 overflow-auto max-h-48">{{ log.after_json | tojson(indent=2) if log.after_json else '—' }}</pre>
+              </div>
+            </div>
+          </details>
+          {% else %}
+          —
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="px-4 py-8 text-center text-muted text-sm">Keine Einträge gefunden.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if pagination.pages > 1 %}
+  <div class="flex items-center justify-between gap-3 px-4 py-3 border-t border-line text-xs text-ink2">
+    <div>
+      Seite {{ pagination.page }} von {{ pagination.pages }} · {{ pagination.total }} Einträge
+    </div>
+    <div class="flex items-center gap-2">
+      {% set base = '/admin/audit?action=' ~ (filters.action or '') ~ '&actor_user_id=' ~ (filters.actor_user_id or '') ~ '&entity_type=' ~ (filters.entity_type or '') ~ '&date_from=' ~ (filters.date_from or '') ~ '&date_to=' ~ (filters.date_to or '') ~ '&sort=' ~ filters.sort ~ '&per_page=' ~ pagination.per_page %}
+      {% if pagination.has_prev %}
+      <a class="btn-ghost-sm" style="height:30px;padding:0 10px;border-radius:8px;" href="{{ base }}&page={{ pagination.prev_num }}">Zurück</a>
+      {% else %}
+      <span class="btn-ghost-sm opacity-50" style="height:30px;padding:0 10px;border-radius:8px;">Zurück</span>
+      {% endif %}
+      {% if pagination.has_next %}
+      <a class="btn-ghost-sm" style="height:30px;padding:0 10px;border-radius:8px;" href="{{ base }}&page={{ pagination.next_num }}">Weiter</a>
+      {% else %}
+      <span class="btn-ghost-sm opacity-50" style="height:30px;padding:0 10px;border-radius:8px;">Weiter</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

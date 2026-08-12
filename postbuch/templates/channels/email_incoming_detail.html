@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block topbar_left %}
+<a href="/channels/email-incoming" class="btn-ghost" style="height:36px; font-size:0.8125rem; padding:0 12px; border-radius:8px;">
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+  E-Mail Eingang
+</a>
+{% if editable %}
+<button form="edit-form" type="submit" class="btn" style="height:36px; font-size:0.8125rem; padding:0 16px; border-radius:8px;">Speichern</button>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Title block -->
+<div class="mb-7">
+  <h1 class="page-title leading-snug">{{ item.subject }}</h1>
+  <div class="flex items-center gap-2 mt-2.5 flex-wrap">
+    <span class="chip chip-eingang">E-Mail Eingang</span>
+    {% if item.status == "neu" %}
+    <span class="chip chip-neu">Neu</span>
+    {% elif item.status == "in_bearbeitung" %}
+    <span class="chip chip-progress">In Bearbeitung</span>
+    {% elif item.status == "weitergeleitet" %}
+    <span class="chip chip-done">Weitergeleitet</span>
+    {% elif item.status == "wartet_aktion" %}
+    <span class="chip chip-pending">Wartet</span>
+    {% elif item.status == "geschlossen" %}
+    <span class="chip chip-neutral">Abgeschlossen</span>
+    {% else %}
+    <span class="chip chip-neutral">{{ item.status }}</span>
+    {% endif %}
+    <span class="text-sm text-muted">{{ item.received_at.strftime('%d.%m.%Y %H:%M') if item.received_at else '–' }}</span>
+    {% if mailbox %}<span class="text-sm text-muted">·&nbsp; {{ mailbox.name }}</span>{% endif %}
+  </div>
+</div>
+
+<!-- Two-column layout: left = work surface, right = source/preview -->
+<div class="grid gap-6" style="grid-template-columns: 1fr 360px; align-items: start;">
+
+  <!-- ── LEFT: primary working surface ── -->
+  <div class="flex flex-col gap-5">
+
+    <!-- Section 1: Fachliche Daten / Bearbeitung -->
+    <div class="card mb-0">
+      <div class="card-header">
+        <h2 class="text-sm font-semibold text-ink m-0">Bearbeitung</h2>
+      </div>
+      <div class="card-body">
+        {% if editable %}
+        <form id="edit-form" method="post" action="/channels/email-incoming/{{ item.id }}/update" class="form-stack">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="form-label">Status</label>
+              <select class="form-select" name="status_value">
+                <option value="neu" {% if item.status == "neu" %}selected{% endif %}>Neu</option>
+                <option value="in_bearbeitung" {% if item.status == "in_bearbeitung" %}selected{% endif %}>In Bearbeitung</option>
+                <option value="wartet_aktion" {% if item.status == "wartet_aktion" %}selected{% endif %}>Wartet auf Aktion</option>
+                <option value="weitergeleitet" {% if item.status == "weitergeleitet" %}selected{% endif %}>Weitergeleitet</option>
+                <option value="beantwortet" {% if item.status == "beantwortet" %}selected{% endif %}>Beantwortet</option>
+                <option value="geschlossen" {% if item.status == "geschlossen" %}selected{% endif %}>Geschlossen</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Kategorie</label>
+              <select class="form-select" name="category_id">
+                <option value="">Keine</option>
+                {% for cat in categories %}
+                <option value="{{ cat.id }}" {% if item.category_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="form-label">Interne Notiz</label>
+            <textarea class="form-textarea" name="resolution_note" placeholder="Notiz zur Bearbeitung …">{{ item.resolution_note or '' }}</textarea>
+          </div>
+        </form>
+        {% else %}
+        <dl class="detail-grid">
+          <dt>Status</dt><dd>{{ item.status }}</dd>
+          <dt>Kategorie</dt><dd>{{ item.category_id or '–' }}</dd>
+          <dt>Notiz</dt><dd>{{ item.resolution_note or '–' }}</dd>
+        </dl>
+        {% endif %}
+      </div>
+      {% if editable %}
+      <div class="card-footer justify-end">
+        <button class="btn-ghost" type="submit" form="edit-form"
+                onclick="this.form.querySelector('[name=status_value]').value='geschlossen'">
+          Abschließen
+        </button>
+        <button class="btn" type="submit" form="edit-form">Speichern</button>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Section 2: Message body -->
+    <div class="card mb-0">
+      <div class="card-header">
+        <h2 class="text-sm font-semibold text-ink m-0">Nachricht</h2>
+        <div class="flex gap-2">
+          <span class="text-xs text-muted">Von: {{ item.sender or '–' }}</span>
+          {% if item.recipient %}<span class="text-xs text-muted">An: {{ item.recipient }}</span>{% endif %}
+        </div>
+      </div>
+      <div class="card-body">
+        {% if item.body_html %}
+        <iframe
+          id="mail-body"
+          srcdoc="{{ item.body_html | e }}"
+          sandbox="allow-same-origin allow-popups"
+          referrerpolicy="no-referrer"
+          class="w-full block border-0 rounded-xl bg-paper"
+          style="min-height:200px; height:400px;"
+          onload="(function(f){ var h = f.contentDocument.documentElement.scrollHeight; f.style.height = Math.min(h, 900) + 'px'; })(this)">
+        </iframe>
+        {% elif item.body_text %}
+        <pre class="ocr">{{ item.body_text }}</pre>
+        {% else %}
+        <p class="text-muted text-sm m-0">Kein Nachrichtentext verfügbar.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if item.attachments %}
+    <!-- Attachments -->
+    <div class="card mb-0">
+      <div class="card-header">
+        <h2 class="text-sm font-semibold text-ink m-0">Anhänge</h2>
+        <span class="text-xs text-muted">{{ item.attachments | length }} Datei{% if item.attachments | length != 1 %}en{% endif %}</span>
+      </div>
+      <ul class="plain-list text-sm px-5">
+        {% for att in item.attachments %}
+        <li class="flex items-center justify-between gap-3">
+          <span class="font-medium text-ink">{{ att.original_filename }}</span>
+          <span class="text-muted text-xs flex-shrink-0">{{ att.mime_type }}</span>
+          <a class="btn-ghost-sm flex-shrink-0" href="/api/mail-items/{{ item.id }}/attachment/{{ att.id }}">
+            Herunterladen
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- ── RIGHT: contextual metadata ── -->
+  <div class="flex flex-col gap-4">
+
+    <!-- Panel 1: Source metadata -->
+    <div class="card mb-0">
+      <div class="card-header">
+        <h2 class="text-sm font-semibold text-ink m-0">Quellinformationen</h2>
+      </div>
+      <div class="card-body">
+        <dl class="detail-grid">
+          <dt>Von</dt><dd class="text-xs break-all">{{ item.sender or '–' }}</dd>
+          <dt>An</dt><dd class="text-xs break-all">{{ item.recipient or '–' }}</dd>
+          {% if item.cc %}
+          <dt>CC</dt><dd class="text-xs break-all">{{ item.cc }}</dd>
+          {% endif %}
+          <dt>Mailbox</dt><dd>{{ mailbox.name if mailbox else '–' }}</dd>
+          <dt>Erhalten</dt><dd class="text-xs">{{ item.received_at.strftime('%d.%m.%Y %H:%M') if item.received_at else '–' }}</dd>
+        </dl>
+      </div>
+    </div>
+
+    <!-- Panel 2: System info -->
+    <div class="card mb-0">
+      <div class="card-header">
+        <h2 class="text-sm font-semibold text-ink m-0">Systeminformationen</h2>
+      </div>
+      <div class="card-body">
+        <dl class="detail-grid">
+          <dt>Erstellt</dt><dd class="text-xs">{{ item.created_at.strftime('%d.%m.%Y %H:%M') if item.created_at else '–' }}</dd>
+          <dt>Bearbeitet</dt><dd class="text-xs">{{ item.processed_at.strftime('%d.%m.%Y %H:%M') if item.processed_at else '–' }}</dd>
+          <dt>ID</dt><dd class="text-xs text-muted">#{{ item.id }}</dd>
+        </dl>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

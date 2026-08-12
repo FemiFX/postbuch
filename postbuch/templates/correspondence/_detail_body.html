@@ -1,0 +1,432 @@
+{% set compact = compact|default(false) %}
+<meta name="csrf-token" content="{{ csrf_token }}">
+
+<!-- ── Zone A: Header ── -->
+<div class="flex items-start justify-between gap-4 mb-6">
+  <div>
+    <h1 class="page-title mb-2">{{ item.title }}</h1>
+    <div class="flex items-center gap-2 flex-wrap">
+      {% if item.direction == "incoming" %}
+      <span class="chip chip-eingang">Eingang</span>
+      {% else %}
+      <span class="chip chip-ausgang">Ausgang</span>
+      {% endif %}
+      {% if item.status == "neu" %}
+      <span class="chip chip-neu">Neu</span>
+      {% elif item.status == "in_bearbeitung" %}
+      <span class="chip chip-progress">In Bearbeitung</span>
+      {% elif item.status == "erledigt" %}
+      <span class="chip chip-done">Erledigt</span>
+      {% endif %}
+      {% if item.category %}<span class="chip" style="background:#E8F0E8; color:#3A5C3A;">{{ item.category.name }}</span>{% endif %}
+      {% if item.is_duplicate_flag %}<span class="chip chip-duplicate">Duplikat</span>{% endif %}
+      <span class="text-sm text-muted">{{ item.entry_date }}</span>
+    </div>
+  </div>
+  {% if editable %}
+  <div class="flex items-center gap-2 flex-shrink-0">
+    <form method="post" action="/register/{{ item.id }}/move-direction" class="m-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="return_to" value="{{ return_to or '' }}">
+      {% if item.direction == "incoming" %}
+      <input type="hidden" name="direction" value="outgoing">
+      <button type="submit" class="btn-ghost" style="height:36px; font-size:0.8125rem; padding:0 16px;">Nach Ausgang verschieben</button>
+      {% else %}
+      <input type="hidden" name="direction" value="incoming">
+      <button type="submit" class="btn-ghost" style="height:36px; font-size:0.8125rem; padding:0 16px;">Nach Eingang verschieben</button>
+      {% endif %}
+    </form>
+    <button form="edit-form" type="submit" class="btn" style="height:36px; font-size:0.8125rem; padding:0 16px;">Speichern</button>
+    <button form="edit-form" type="submit" class="btn-primary" style="height:36px; font-size:0.8125rem; padding:0 16px;" onclick="markDone()">Als erledigt markieren</button>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── Zone B: Main content — PDF + processing panel ── -->
+<div class="grid gap-6 mb-6" style="grid-template-columns: {% if compact %}minmax(0, 1fr){% else %}minmax(0, 1fr) 380px{% endif %}; align-items: start;">
+
+  <!-- Left: Document viewer -->
+  <div class="card mb-0 overflow-hidden">
+    {% if item.documents %}
+    {% set doc = item.documents[0] %}
+    <div class="card-header">
+      <span class="text-sm font-semibold text-ink">{{ doc.original_filename }}</span>
+      <a href="/api/correspondence/{{ item.id }}/document" class="btn-ghost-sm flex-shrink-0">Herunterladen</a>
+    </div>
+    <div style="background:#F6F7F5;">
+      {% if doc.mime_type and doc.mime_type.startswith("image/") %}
+      <img src="/api/correspondence/{{ item.id }}/document?inline=true"
+           alt="{{ doc.original_filename }}"
+           class="w-full object-contain block"
+           style="max-height:80vh;">
+      {% else %}
+      <iframe src="/api/correspondence/{{ item.id }}/document?inline=true"
+              title="{{ doc.original_filename }}"
+              class="w-full block border-0"
+              style="height:80vh;"></iframe>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="card-header">
+      <h2 class="text-sm font-semibold text-ink m-0">OCR-Text</h2>
+    </div>
+    <div class="card-body">
+      <pre class="ocr">{{ item.ocr_text or "Kein OCR-Text vorhanden." }}</pre>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Right: processing panel (sticky in side-by-side, stacked in compact) -->
+  <div {% if not compact %}style="position:sticky; top:1.5rem;"{% endif %}>
+    {% if error %}
+    <div class="mb-3 px-4 py-3 rounded-lg text-sm" style="background:#FEE2E2; color:#991B1B; border:1px solid #FCA5A5;">
+      {{ error }}
+    </div>
+    {% endif %}
+
+    {% if editable %}
+    <form id="edit-form" method="post" action="/register/{{ item.id }}/edit" class="flex flex-col gap-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="return_to" value="{{ return_to or '' }}">
+      <input type="hidden" id="status_value_input" name="status_value" value="{{ item.status }}">
+
+      <!-- § Dokument einordnen -->
+      <div class="card mb-0">
+        <div class="card-header"><h2 class="text-sm font-semibold text-ink m-0">Dokument einordnen</h2></div>
+        <div class="card-body form-stack">
+          <div>
+            <label class="form-label">Titel</label>
+            <input class="form-input" type="text" name="title" value="{{ item.title }}" required>
+            <p class="text-xs text-muted mt-1">Kurzer, eindeutig auffindbarer Titel für das Register</p>
+          </div>
+          <div>
+            <div class="mb-1 flex items-center justify-between gap-2">
+              <label class="form-label m-0">Kategorie</label>
+              <div class="flex items-center gap-1">
+                <button id="btn-category-refresh" type="button" class="btn-ghost h-6 w-6 p-0 text-[0.75rem]" title="Kategorien neu laden" aria-label="Kategorien neu laden">↻</button>
+                <button id="btn-category-add" type="button" class="btn-ghost h-6 w-6 p-0 text-[0.95rem] leading-none" title="Kategorie anlegen" aria-label="Kategorie anlegen">+</button>
+              </div>
+            </div>
+            <select id="ctrl-category" class="form-select" name="category_id">
+              <option value="">Keine</option>
+              {% for category in categories %}
+              <option value="{{ category.id }}" {% if item.category_id == category.id %}selected{% endif %}>{{ category.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="form-label">Datum</label>
+              <input class="form-input" type="date" name="entry_date" value="{{ item.entry_date }}" required>
+            </div>
+            <div>
+              <label class="form-label">Status</label>
+              <select class="form-select" id="status_display" onchange="document.getElementById('status_value_input').value=this.value">
+                <option value="neu" {% if item.status == "neu" %}selected{% endif %}>Neu</option>
+                <option value="in_bearbeitung" {% if item.status == "in_bearbeitung" %}selected{% endif %}>In Bearbeitung</option>
+                <option value="erledigt" {% if item.status == "erledigt" %}selected{% endif %}>Erledigt</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- § Verbleib / Weitergabe -->
+      <div class="card mb-0">
+        <div class="card-header"><h2 class="text-sm font-semibold text-ink m-0">Verbleib / Weitergabe</h2></div>
+        <div class="card-body form-stack">
+          <div>
+            <label class="form-label">Ablageort</label>
+            <input class="form-input" type="text" name="placement_location"
+                   value="{{ item.placement_location or '' }}"
+                   placeholder="z. B. Maithys Fach">
+          </div>
+          <div>
+            <label class="form-label">Weitergegeben an</label>
+            <input class="form-input" type="text" name="handoff_target"
+                   value="{{ item.handoff_target or '' }}"
+                   placeholder="z. B. Jugendprojekt">
+          </div>
+          <div>
+            <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-ink">
+              <input type="checkbox" id="notification_done_cb" name="notification_done"
+                     {% if item.notification_done %}checked{% endif %}
+                     onchange="toggleNotification(this.checked)"
+                     style="width:16px; height:16px; accent-color:var(--c-brand);">
+              Benachrichtigung erfolgt?
+            </label>
+          </div>
+          <div id="notification_fields" class="form-stack" style="{% if not item.notification_done %}display:none;{% endif %}">
+            <div>
+              <label class="form-label">Art der Benachrichtigung</label>
+              <select class="form-select" name="notification_channel">
+                <option value="">– bitte wählen –</option>
+                {% set channel = item.notification_channel or "" %}
+                <option value="E-Mail" {% if channel == "E-Mail" %}selected{% endif %}>E-Mail</option>
+                <option value="Telefon" {% if channel == "Telefon" %}selected{% endif %}>Telefon</option>
+                <option value="persönlich" {% if channel == "persönlich" %}selected{% endif %}>persönlich</option>
+                <option value="Mattermost" {% if channel == "Mattermost" %}selected{% endif %}>Mattermost</option>
+                <option value="sonstiges" {% if channel == "sonstiges" %}selected{% endif %}>sonstiges</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Benachrichtigt an</label>
+              <input class="form-input" type="text" name="notified_party"
+                     value="{{ item.notified_party or '' }}"
+                     placeholder="z. B. Angela">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- § Bearbeitungsvermerk -->
+      <div class="card mb-0">
+        <div class="card-header"><h2 class="text-sm font-semibold text-ink m-0">Bearbeitungsvermerk</h2></div>
+        <div class="card-body">
+          <textarea class="form-textarea" name="processing_note" style="min-height:90px;"
+                    placeholder="z. B. Original im Fach des Jugendprojekts abgelegt, Angela per E-Mail informiert.">{{ item.processing_note or '' }}</textarea>
+        </div>
+      </div>
+
+      <!-- Panel footer actions -->
+      <div class="flex gap-2">
+        <button type="submit" class="btn flex-1" style="height:38px; font-size:0.875rem;">Speichern</button>
+        <button type="submit" class="btn-primary flex-1" style="height:38px; font-size:0.875rem;" onclick="markDone()">Als erledigt markieren</button>
+      </div>
+
+    </form>
+
+    {% else %}
+    <!-- Read-only view -->
+    <div class="card mb-0">
+      <div class="card-header"><h2 class="text-sm font-semibold text-ink m-0">Bearbeitung</h2></div>
+      <div class="card-body">
+        <dl class="detail-grid">
+          <dt>Kategorie</dt><dd>{{ item.category.name if item.category else "–" }}</dd>
+          <dt>Ablageort</dt><dd>{{ item.placement_location or "–" }}</dd>
+          <dt>Weitergegeben an</dt><dd>{{ item.handoff_target or "–" }}</dd>
+          {% if item.notification_done %}
+          <dt>Benachrichtigung</dt><dd>{{ item.notification_channel or "–" }} – {{ item.notified_party or "–" }}</dd>
+          {% else %}
+          <dt>Benachrichtigung</dt><dd>Nein</dd>
+          {% endif %}
+          {% if item.processing_note %}
+          <dt>Bearbeitungsvermerk</dt><dd>{{ item.processing_note }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+    {% endif %}
+  </div><!-- /sticky panel -->
+
+</div><!-- /Zone B grid -->
+
+<!-- ── Zone C: Accordion sections ── -->
+<div class="flex flex-col gap-3">
+
+  <!-- Technische Details -->
+  <details class="card mb-0" style="overflow:hidden;">
+    <summary class="card-header" style="cursor:pointer; list-style:none; user-select:none;">
+      <h2 class="text-sm font-semibold text-ink m-0">Technische Details</h2>
+      <svg class="details-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </summary>
+    <div class="card-body">
+      <dl class="detail-grid">
+        <dt>Quelle</dt><dd>{{ item.source_type }}</dd>
+        <dt>Mailbox</dt><dd>{{ item.source_mailbox or "–" }}</dd>
+        <dt>Message-ID</dt><dd class="text-xs break-all">{{ item.source_email_message_id or "–" }}</dd>
+        <dt>Von</dt><dd class="text-xs break-all">{{ item.source_email_from or "–" }}</dd>
+        <dt>An</dt><dd class="text-xs break-all">{{ item.source_email_to or "–" }}</dd>
+        <dt>Betreff</dt><dd>{{ item.source_email_subject or "–" }}</dd>
+        <dt>OCR-Status</dt><dd>{{ item.ocr_status }}</dd>
+        <dt>OCR-Methode</dt><dd>{{ item.ocr_method or "–" }}</dd>
+        {% if item.ocr_confidence %}<dt>OCR-Konfidenz</dt><dd>{{ item.ocr_confidence }}%</dd>{% endif %}
+        {% if item.ocr_page_count %}<dt>Seitenanzahl</dt><dd>{{ item.ocr_page_count }}</dd>{% endif %}
+      </dl>
+      {% if item.ocr_text %}
+      <div class="mt-4">
+        <p class="text-xs font-semibold text-muted mb-1 uppercase tracking-wide">OCR-Text</p>
+        <pre class="ocr" style="max-height:200px; overflow-y:auto; font-size:0.75rem;">{{ item.ocr_text }}</pre>
+      </div>
+      {% endif %}
+    </div>
+  </details>
+
+  <!-- Audit-Historie -->
+  <details class="card mb-0" style="overflow:hidden;">
+    <summary class="card-header" style="cursor:pointer; list-style:none; user-select:none;">
+      <h2 class="text-sm font-semibold text-ink m-0">Audit-Historie</h2>
+      <svg class="details-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </summary>
+    <div class="card-body p-0">
+      {% if audit_entries %}
+      <ul class="plain-list text-sm px-5">
+        {% for entry in audit_entries %}
+        <li class="text-ink2">
+          <span class="text-xs text-muted">{{ entry.created_at.strftime('%d.%m.%Y %H:%M') if entry.created_at else '' }}</span>
+          &nbsp;·&nbsp; {{ entry.action }}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="px-5 py-5 text-center">
+        <p class="text-sm text-muted m-0">Keine Historie vorhanden.</p>
+      </div>
+      {% endif %}
+    </div>
+  </details>
+
+  <!-- Kategorie vorschlagen -->
+  {% if current_user.role in ["editor", "admin", "super_admin"] %}
+  <details class="card mb-0" style="overflow:hidden;">
+    <summary class="card-header" style="cursor:pointer; list-style:none; user-select:none;">
+      <h2 class="text-sm font-semibold text-ink m-0">Kategorie vorschlagen</h2>
+      <svg class="details-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </summary>
+    <div class="card-body">
+      <form method="post" action="/admin/suggestions" class="form-stack">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div>
+          <label class="form-label">Name</label>
+          <input class="form-input" type="text" name="proposed_name" required>
+        </div>
+        <div>
+          <label class="form-label">Begründung</label>
+          <textarea class="form-textarea" name="proposal_reason" style="min-height:72px;"></textarea>
+        </div>
+        <div><button class="btn" type="submit">Vorschlag senden</button></div>
+      </form>
+    </div>
+  </details>
+  {% endif %}
+
+</div><!-- /Zone C -->
+
+<div id="category-modal" class="hidden fixed inset-0 z-40">
+  <div class="absolute inset-0 bg-black/30" data-category-close></div>
+  <div class="relative mx-auto mt-24 w-full max-w-md">
+    <div class="card mb-0 shadow-xl">
+      <div class="card-header">
+        <h3 class="text-base font-semibold text-ink m-0">Kategorie anlegen</h3>
+        <button id="category-modal-close" type="button" class="btn-ghost h-8 w-8 p-0">×</button>
+      </div>
+      <form id="category-create-form" class="px-4 py-4 flex flex-col gap-3">
+        <div>
+          <label class="form-label text-sm mb-1">Name</label>
+          <input id="category-create-name" type="text" class="form-input h-9 text-sm" placeholder="z. B. Personal" required>
+        </div>
+        <div>
+          <label class="form-label text-sm mb-1">Beschreibung</label>
+          <textarea id="category-create-description" class="form-textarea text-sm" style="min-height:72px;" placeholder="Kurzbeschreibung der Kategorie"></textarea>
+        </div>
+        <p id="category-create-error" class="hidden text-xs text-err m-0"></p>
+        <div class="flex items-center justify-end gap-2">
+          <button type="button" class="btn-ghost h-9 px-3 text-sm" data-category-close>Abbrechen</button>
+          <button id="category-create-submit" type="submit" class="btn h-9 px-3 text-sm">Anlegen</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+details[open] .details-chevron { transform: rotate(180deg); }
+.details-chevron { transition: transform 0.15s; }
+</style>
+
+<script>
+(function() {
+  function csrf() { return document.querySelector('meta[name="csrf-token"]').content; }
+  async function api(url, method, body) {
+    const opts = { method: method || 'GET', headers: {} };
+    if (opts.method !== 'GET') {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.headers['x-csrf-token'] = csrf();
+    }
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(url, opts);
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      throw new Error(payload.detail || 'Fehler');
+    }
+    return res.json();
+  }
+  function showToast(message, ok) {
+    const okFlag = ok !== false;
+    const color = okFlag ? '#2F7D57' : '#C05656';
+    const bg = okFlag ? '#E8F5EC' : '#FBEAEA';
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    toast.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:60;padding:10px 12px;border-radius:10px;background:' + bg + ';color:' + color + ';border:1px solid ' + color + '33;font-size:12px;';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2200);
+  }
+  async function refreshCategories(selectedCategoryId, silent) {
+    const select = document.getElementById('ctrl-category');
+    if (!select) return;
+    const currentValue = (selectedCategoryId !== undefined && selectedCategoryId !== null) ? String(selectedCategoryId) : (select.value || '');
+    const categories = await api('/api/categories');
+    categories.sort((a, b) => a.name.localeCompare(b.name, 'de-DE', { sensitivity: 'base' }));
+    select.innerHTML = '<option value="">Keine</option>' + categories.map((c) => '<option value="' + c.id + '">' + c.name + '</option>').join('');
+    select.value = currentValue;
+    if (!silent) showToast('Kategorien aktualisiert ✓');
+  }
+  function openCategoryModal() {
+    document.getElementById('category-create-name').value = '';
+    document.getElementById('category-create-description').value = '';
+    const error = document.getElementById('category-create-error');
+    error.classList.add('hidden');
+    error.textContent = '';
+    document.getElementById('category-modal').classList.remove('hidden');
+    document.getElementById('category-create-name').focus();
+  }
+  function closeCategoryModal() {
+    document.getElementById('category-modal').classList.add('hidden');
+    const error = document.getElementById('category-create-error');
+    error.classList.add('hidden');
+    error.textContent = '';
+  }
+  window.toggleNotification = function(show) {
+    const el = document.getElementById('notification_fields');
+    if (el) el.style.display = show ? '' : 'none';
+  };
+  window.markDone = function() {
+    const v = document.getElementById('status_value_input');
+    const d = document.getElementById('status_display');
+    if (v) v.value = 'erledigt';
+    if (d) d.value = 'erledigt';
+  };
+  document.getElementById('btn-category-refresh')?.addEventListener('click', async () => {
+    try { await refreshCategories(); } catch (err) { showToast(err.message || 'Kategorien konnten nicht geladen werden.', false); }
+  });
+  document.getElementById('btn-category-add')?.addEventListener('click', openCategoryModal);
+  document.getElementById('category-modal-close')?.addEventListener('click', closeCategoryModal);
+  document.querySelectorAll('[data-category-close]').forEach((el) => el.addEventListener('click', closeCategoryModal));
+  document.getElementById('category-create-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const name = document.getElementById('category-create-name').value.trim();
+    const description = document.getElementById('category-create-description').value.trim();
+    const error = document.getElementById('category-create-error');
+    const submit = document.getElementById('category-create-submit');
+    if (!name) {
+      error.textContent = 'Bitte einen Kategorienamen eingeben.';
+      error.classList.remove('hidden');
+      return;
+    }
+    submit.disabled = true;
+    submit.textContent = 'Anlegen ...';
+    try {
+      const category = await api('/api/categories', 'POST', { name: name, description: description || null });
+      await refreshCategories(category.id, true);
+      closeCategoryModal();
+      showToast('Kategorie angelegt ✓');
+    } catch (err) {
+      error.textContent = err.message || 'Kategorie konnte nicht angelegt werden.';
+      error.classList.remove('hidden');
+    } finally {
+      submit.disabled = false;
+      submit.textContent = 'Anlegen';
+    }
+  });
+})();
+</script>

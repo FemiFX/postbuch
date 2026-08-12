@@ -1,0 +1,472 @@
+{% extends "base.html" %}
+{% block content %}
+<meta name="csrf-token" content="{{ csrf_token }}">
+
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Weiterleitungen</h1>
+    <p class="page-subtitle">Weiterleitungsziele und E-Mail-Vorlagen für eingehende Nachrichten verwalten.</p>
+  </div>
+  <button onclick="openCreateForm()" class="btn">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></svg>
+    Neu anlegen
+  </button>
+</div>
+
+<!-- Inline feedback banner -->
+<div id="page-toast" style="display:none;" class="flex items-start gap-3 rounded-xl px-4 py-3 mb-5 text-sm"></div>
+
+<!-- Create route form (hidden) -->
+<div id="create-form-card" class="card mb-5" style="display:none;">
+  <div class="card-header">
+    <h2 class="text-sm font-semibold text-ink m-0">Neues Weiterleitungsziel</h2>
+    <button onclick="closeCreateForm()" class="btn-ghost-sm">Abbrechen</button>
+  </div>
+  <div class="card-body">
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="form-label">Name <span class="text-err">*</span></label>
+        <input id="new-name" type="text" class="form-input w-full" placeholder="z.B. Beratung">
+      </div>
+      <div>
+        <label class="form-label">Ziel-E-Mail <span class="text-muted font-normal">(optional)</span></label>
+        <input id="new-email" type="email" class="form-input w-full" placeholder="beratung@organisation.de">
+      </div>
+      <div class="col-span-2">
+        <label class="form-label">Beschreibung <span class="text-muted font-normal">(optional)</span></label>
+        <input id="new-desc" type="text" class="form-input w-full" placeholder="Kurze Beschreibung">
+      </div>
+    </div>
+  </div>
+  <div class="card-footer justify-end">
+    <button onclick="closeCreateForm()" class="btn-ghost" style="height:36px; font-size:0.8125rem; padding:0 12px; border-radius:8px;">Abbrechen</button>
+    <button onclick="doCreate()" class="btn" style="height:36px; font-size:0.8125rem; padding:0 16px; border-radius:8px;">Speichern</button>
+  </div>
+</div>
+
+{% if routes %}
+<!-- Routes list -->
+<div class="flex flex-col gap-4">
+  {% for route in routes %}
+  <div class="card mb-0" id="route-card-{{ route.id }}">
+
+    <!-- Route header row -->
+    <div class="card-header">
+      <div class="flex items-center gap-3 flex-1 min-w-0">
+        <div class="flex flex-col min-w-0">
+          <span id="view-name-{{ route.id }}" class="text-sm font-semibold text-ink leading-snug">{{ route.name }}</span>
+          <span id="view-desc-{{ route.id }}" class="text-xs text-muted mt-0.5">
+            {{ route.description or '' }}{% if route.target_email %} · {{ route.target_email }}{% endif %}
+          </span>
+        </div>
+        {% if route.is_active %}
+        <span class="chip chip-aktiv text-xs flex-shrink-0" id="status-chip-{{ route.id }}">Aktiv</span>
+        {% else %}
+        <span class="chip chip-inaktiv text-xs flex-shrink-0" id="status-chip-{{ route.id }}">Inaktiv</span>
+        {% endif %}
+      </div>
+      <div class="flex items-center gap-1 flex-shrink-0">
+        <button onclick="toggleTemplates({{ route.id }})"
+                class="btn-ghost-sm flex items-center gap-1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Vorlagen
+          <span class="text-[0.65rem] font-bold px-1.5 py-0.5 rounded-full leading-none"
+                id="tpl-count-{{ route.id }}"
+                style="background:#E7E5DF; color:#667066;">{{ route.templates | selectattr('is_active') | list | length }}</span>
+        </button>
+        <button class="btn-ghost-sm js-route-edit"
+                data-id="{{ route.id }}"
+                data-name="{{ route.name }}"
+                data-desc="{{ route.description or '' }}"
+                data-email="{{ route.target_email or '' }}">Bearbeiten</button>
+        {% if route.is_active %}
+        <button onclick="doDeactivate({{ route.id }})" class="btn-ghost-sm" style="color:var(--color-err);">Deaktivieren</button>
+        {% else %}
+        <button onclick="doActivate({{ route.id }})" class="btn-ghost-sm" style="color:var(--color-ok);">Aktivieren</button>
+        {% endif %}
+        <button class="btn-ghost-sm js-route-delete"
+                data-id="{{ route.id }}"
+                data-name="{{ route.name }}"
+                style="color:var(--color-err);">Löschen</button>
+      </div>
+    </div>
+
+    <!-- Inline route edit form (hidden) -->
+    <div id="route-edit-{{ route.id }}" style="display:none;" class="border-t border-line px-5 py-4">
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="form-label text-xs mb-1">Name</label>
+          <input id="edit-name-{{ route.id }}" type="text" class="form-input w-full" style="height:36px; font-size:0.8125rem;">
+        </div>
+        <div>
+          <label class="form-label text-xs mb-1">Beschreibung</label>
+          <input id="edit-desc-{{ route.id }}" type="text" class="form-input w-full" style="height:36px; font-size:0.8125rem;">
+        </div>
+        <div>
+          <label class="form-label text-xs mb-1">Ziel-E-Mail</label>
+          <input id="edit-email-{{ route.id }}" type="email" class="form-input w-full" style="height:36px; font-size:0.8125rem;">
+        </div>
+      </div>
+      <div class="flex gap-2 mt-3">
+        <button onclick="doRouteUpdate({{ route.id }})" class="btn" style="height:32px; font-size:0.8rem; padding:0 12px; border-radius:7px;">Speichern</button>
+        <button onclick="cancelRouteEdit({{ route.id }})" class="btn-ghost" style="height:32px; font-size:0.8rem; padding:0 10px; border-radius:7px;">Abbrechen</button>
+      </div>
+    </div>
+
+    <!-- Templates section (collapsed by default) -->
+    <div id="templates-section-{{ route.id }}" style="display:none;" class="border-t border-line">
+
+      <!-- Existing templates -->
+      {% set active_templates = route.templates | selectattr('is_active') | list %}
+      {% if active_templates %}
+      <table class="w-full text-sm">
+        <thead>
+          <tr>
+            <th class="table-th">Vorlagenname</th>
+            <th class="table-th">Betreffvorlage</th>
+            <th class="table-th" style="width:100px;">Standard</th>
+            <th class="table-th" style="width:120px;"></th>
+          </tr>
+        </thead>
+        <tbody id="tpl-list-{{ route.id }}">
+          {% for tpl in active_templates %}
+          <tr class="table-row" id="tpl-row-{{ tpl.id }}">
+            <td class="table-td font-medium" id="tplv-name-{{ tpl.id }}">{{ tpl.name }}</td>
+            <td class="table-td text-ink2 text-xs" id="tplv-subj-{{ tpl.id }}">{{ tpl.subject_template }}</td>
+            <td class="table-td">
+              {% if tpl.is_default %}
+              <span class="chip chip-aktiv text-xs">Standard</span>
+              {% else %}
+              <button onclick="doSetDefault({{ tpl.id }}, {{ route.id }})" class="btn-ghost-sm text-muted">Setzen</button>
+              {% endif %}
+            </td>
+            <td class="table-td">
+              <div class="flex gap-1 justify-end">
+                <button class="btn-ghost-sm js-tpl-edit"
+                        data-tpl-id="{{ tpl.id }}"
+                        data-route-id="{{ route.id }}"
+                        data-name="{{ tpl.name }}"
+                        data-subj="{{ tpl.subject_template }}"
+                        data-body="{{ tpl.body_template }}">Bearbeiten</button>
+                <button onclick="doDeleteTpl({{ tpl.id }}, {{ route.id }})"
+                        class="btn-ghost-sm" style="color:var(--color-err);">Löschen</button>
+              </div>
+            </td>
+          </tr>
+          <!-- Template edit row (hidden) -->
+          <tr id="tpl-edit-row-{{ tpl.id }}" style="display:none;" class="bg-paper">
+            <td colspan="4" class="table-td">
+              <div class="flex flex-col gap-3 py-2">
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="form-label text-xs mb-1">Name</label>
+                    <input id="tple-name-{{ tpl.id }}" type="text" class="form-input w-full" style="height:36px; font-size:0.8125rem;">
+                  </div>
+                  <div>
+                    <label class="form-label text-xs mb-1">Betreffvorlage</label>
+                    <input id="tple-subj-{{ tpl.id }}" type="text" class="form-input w-full" style="height:36px; font-size:0.8125rem;" placeholder="Weiterleitung: {betreff}">
+                  </div>
+                </div>
+                <div>
+                  <label class="form-label text-xs mb-1">Textvorlage</label>
+                  <textarea id="tple-body-{{ tpl.id }}" class="form-textarea w-full" style="min-height:100px; font-size:0.8125rem;"
+                            placeholder="Platzhalter: {betreff} {absender} {datum} {inhalt}"></textarea>
+                </div>
+                <div class="flex gap-2">
+                  <button onclick="doTplUpdate({{ tpl.id }}, {{ route.id }})" class="btn" style="height:32px; font-size:0.8rem; padding:0 12px; border-radius:7px;">Speichern</button>
+                  <button onclick="cancelTplEdit({{ tpl.id }})" class="btn-ghost" style="height:32px; font-size:0.8rem; padding:0 10px; border-radius:7px;">Abbrechen</button>
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div id="tpl-empty-{{ route.id }}" class="px-5 py-4 text-xs text-muted text-center">
+        Noch keine Vorlagen für dieses Weiterleitungsziel.
+      </div>
+      {% endif %}
+
+      <!-- Add template form (hidden) -->
+      <div id="add-tpl-form-{{ route.id }}" style="display:none;" class="border-t border-line px-5 py-4">
+        <p class="text-xs font-semibold text-ink mb-3 mt-0">Neue Vorlage</p>
+        <div class="flex flex-col gap-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="form-label text-xs mb-1">Vorlagenname <span class="text-err">*</span></label>
+              <input id="new-tpl-name-{{ route.id }}" type="text" class="form-input w-full" style="height:36px; font-size:0.8125rem;" placeholder="Standard-Weiterleitung">
+            </div>
+            <div>
+              <label class="form-label text-xs mb-1">Betreffvorlage <span class="text-err">*</span></label>
+              <input id="new-tpl-subj-{{ route.id }}" type="text" class="form-input w-full" style="height:36px; font-size:0.8125rem;" value="Weiterleitung: {betreff}">
+            </div>
+          </div>
+          <div>
+            <label class="form-label text-xs mb-1">Textvorlage <span class="text-err">*</span></label>
+            <textarea id="new-tpl-body-{{ route.id }}" class="form-textarea w-full" style="min-height:100px; font-size:0.8125rem;"
+                      placeholder="Platzhalter: {betreff} {absender} {datum} {inhalt}"></textarea>
+            <p class="text-[0.7rem] text-muted mt-1 m-0">Verfügbare Platzhalter: <code>{betreff}</code> · <code>{absender}</code> · <code>{datum}</code> · <code>{inhalt}</code> <span class="text-muted">(= Trennzeile + Originaltext)</span></p>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="doAddTemplate({{ route.id }})" class="btn" style="height:32px; font-size:0.8rem; padding:0 12px; border-radius:7px;">Vorlage speichern</button>
+            <button onclick="document.getElementById('add-tpl-form-{{ route.id }}').style.display='none'" class="btn-ghost" style="height:32px; font-size:0.8rem; padding:0 10px; border-radius:7px;">Abbrechen</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer: add template button -->
+      <div class="px-5 py-3 border-t border-line">
+        <button onclick="document.getElementById('add-tpl-form-{{ route.id }}').style.display=''; document.getElementById('new-tpl-name-{{ route.id }}').focus()"
+                class="btn-ghost-sm flex items-center gap-1.5">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></svg>
+          Vorlage hinzufügen
+        </button>
+      </div>
+
+    </div>
+    <!-- /templates-section -->
+
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="card mb-0">
+  <div class="card-body py-14 text-center">
+    <div class="flex flex-col items-center gap-3">
+      <div class="w-12 h-12 rounded-full bg-brand-s flex items-center justify-center">
+        <svg class="text-brand" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>
+      </div>
+      <div>
+        <p class="text-sm font-medium text-ink m-0">Keine Weiterleitungsziele</p>
+        <p class="text-sm text-muted mt-1 m-0">Klicken Sie auf "Neu anlegen" um das erste Weiterleitungsziel zu erstellen.</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div id="delete-route-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-4">
+  <div class="absolute inset-0 bg-ink/45 backdrop-blur-[2px]" data-close-delete-modal></div>
+  <div class="relative w-full max-w-lg rounded-2xl border border-line bg-paper shadow-2xl">
+    <div class="card-header">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-err-s text-err flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        </div>
+        <h3 class="m-0 text-base font-semibold">Weiterleitungsziel löschen</h3>
+      </div>
+      <button type="button" class="btn-ghost-sm" data-close-delete-modal>Schließen</button>
+    </div>
+    <div class="card-body">
+      <p class="m-0 text-ink2">Dieses Ziel und alle zugehörigen Vorlagen werden dauerhaft entfernt.</p>
+      <p id="delete-route-name" class="mt-3 mb-0 font-medium text-ink"></p>
+    </div>
+    <div class="card-footer justify-end">
+      <button type="button" class="btn-ghost" data-close-delete-modal>Abbrechen</button>
+      <button type="button" class="btn" id="confirm-delete-route-btn" style="background:#C05656;">Löschen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Event delegation for buttons that carry data-* attributes (avoids |tojson in onclick)
+let pendingDeleteRouteId = null;
+let pendingDeleteRouteName = '';
+
+document.addEventListener('click', function(e) {
+  const routeEdit = e.target.closest('.js-route-edit');
+  if (routeEdit) {
+    const d = routeEdit.dataset;
+    startRouteEdit(+d.id, d.name, d.desc, d.email);
+    return;
+  }
+  const routeDelete = e.target.closest('.js-route-delete');
+  if (routeDelete) {
+    const d = routeDelete.dataset;
+    openDeleteModal(+d.id, d.name);
+    return;
+  }
+  const tplEdit = e.target.closest('.js-tpl-edit');
+  if (tplEdit) {
+    const d = tplEdit.dataset;
+    openTplEdit(+d.tplId, +d.routeId, d.name, d.subj, d.body);
+    return;
+  }
+});
+
+function csrf() { return document.querySelector('meta[name="csrf-token"]').content; }
+
+async function apiCall(url, method, body) {
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf() },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const msg = await res.json().catch(() => ({}));
+    throw new Error(msg.detail || 'Fehler');
+  }
+  return res.json();
+}
+
+function showBanner(msg, ok = true) {
+  const el = document.getElementById('page-toast');
+  el.textContent = msg;
+  if (ok) {
+    el.style.cssText = 'display:flex;align-items:start;gap:12px;border-radius:12px;padding:12px 16px;margin-bottom:20px;font-size:.875rem;background:#E8F5EC;color:#2F7D57;border:1px solid rgba(47,125,87,.25);';
+  } else {
+    el.style.cssText = 'display:flex;align-items:start;gap:12px;border-radius:12px;padding:12px 16px;margin-bottom:20px;font-size:.875rem;background:#FBEAEA;color:#C05656;border:1px solid rgba(192,86,86,.25);';
+  }
+  setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
+
+function openDeleteModal(id, name) {
+  pendingDeleteRouteId = id;
+  pendingDeleteRouteName = name || '';
+  const modal = document.getElementById('delete-route-modal');
+  document.getElementById('delete-route-name').textContent = pendingDeleteRouteName;
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function closeDeleteModal() {
+  const modal = document.getElementById('delete-route-modal');
+  modal.classList.remove('flex');
+  modal.classList.add('hidden');
+  pendingDeleteRouteId = null;
+  pendingDeleteRouteName = '';
+}
+
+document.querySelectorAll('[data-close-delete-modal]').forEach((el) => {
+  el.addEventListener('click', closeDeleteModal);
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeDeleteModal();
+});
+
+document.getElementById('confirm-delete-route-btn').addEventListener('click', async () => {
+  if (!pendingDeleteRouteId) return;
+  await doDeleteRoute(pendingDeleteRouteId);
+});
+
+// ── Route create ─────────────────────────────────────────────
+function openCreateForm() {
+  document.getElementById('create-form-card').style.display = '';
+  document.getElementById('new-name').focus();
+}
+function closeCreateForm() {
+  document.getElementById('create-form-card').style.display = 'none';
+  ['new-name','new-email','new-desc'].forEach(id => document.getElementById(id).value = '');
+}
+async function doCreate() {
+  const name  = document.getElementById('new-name').value.trim();
+  const email = document.getElementById('new-email').value.trim() || null;
+  const desc  = document.getElementById('new-desc').value.trim() || null;
+  if (!name) { showBanner('Name ist erforderlich.', false); return; }
+  try {
+    await apiCall('/admin/api/forwarding-routes', 'POST', { name, description: desc, target_email: email });
+    window.location.reload();
+  } catch (e) { showBanner(e.message, false); }
+}
+
+// ── Route edit ───────────────────────────────────────────────
+function startRouteEdit(id, name, desc, email) {
+  document.getElementById(`edit-name-${id}`).value  = name;
+  document.getElementById(`edit-desc-${id}`).value  = desc;
+  document.getElementById(`edit-email-${id}`).value = email;
+  document.getElementById(`route-edit-${id}`).style.display = '';
+}
+function cancelRouteEdit(id) { document.getElementById(`route-edit-${id}`).style.display = 'none'; }
+async function doRouteUpdate(id) {
+  const name  = document.getElementById(`edit-name-${id}`).value.trim();
+  const desc  = document.getElementById(`edit-desc-${id}`).value.trim() || null;
+  const email = document.getElementById(`edit-email-${id}`).value.trim() || null;
+  if (!name) { showBanner('Name ist erforderlich.', false); return; }
+  try {
+    await apiCall(`/admin/api/forwarding-routes/${id}`, 'PATCH', { name, description: desc, target_email: email });
+    const descSpan = document.getElementById(`view-desc-${id}`);
+    document.getElementById(`view-name-${id}`).textContent = name;
+    descSpan.textContent = [desc, email].filter(Boolean).join(' · ') || '';
+    cancelRouteEdit(id);
+    showBanner('Gespeichert ✓');
+  } catch (e) { showBanner(e.message, false); }
+}
+
+// ── Activate / Deactivate ─────────────────────────────────────
+async function doDeactivate(id) {
+  try { await apiCall(`/admin/api/forwarding-routes/${id}`, 'PATCH', { is_active: false }); window.location.reload(); }
+  catch (e) { showBanner(e.message, false); }
+}
+async function doActivate(id) {
+  try { await apiCall(`/admin/api/forwarding-routes/${id}`, 'PATCH', { is_active: true }); window.location.reload(); }
+  catch (e) { showBanner(e.message, false); }
+}
+async function doDeleteRoute(id) {
+  try { await apiCall(`/admin/api/forwarding-routes/${id}`, 'DELETE'); window.location.reload(); }
+  catch (e) { closeDeleteModal(); showBanner(e.message, false); }
+}
+
+// ── Templates toggle ─────────────────────────────────────────
+function toggleTemplates(routeId) {
+  const sec = document.getElementById(`templates-section-${routeId}`);
+  sec.style.display = sec.style.display === 'none' ? '' : 'none';
+}
+
+// ── Template create ──────────────────────────────────────────
+async function doAddTemplate(routeId) {
+  const name = document.getElementById(`new-tpl-name-${routeId}`).value.trim();
+  const subj = document.getElementById(`new-tpl-subj-${routeId}`).value.trim();
+  const body = document.getElementById(`new-tpl-body-${routeId}`).value.trim();
+  if (!name || !subj || !body) { showBanner('Name, Betreff und Text sind erforderlich.', false); return; }
+  try {
+    await apiCall(`/admin/api/forwarding-routes/${routeId}/templates`, 'POST', {
+      name, subject_template: subj, body_template: body
+    });
+    window.location.reload();
+  } catch (e) { showBanner(e.message, false); }
+}
+
+// ── Template edit ────────────────────────────────────────────
+function openTplEdit(tplId, routeId, name, subj, body) {
+  document.getElementById(`tple-name-${tplId}`).value = name;
+  document.getElementById(`tple-subj-${tplId}`).value = subj;
+  document.getElementById(`tple-body-${tplId}`).value = body;
+  document.getElementById(`tpl-edit-row-${tplId}`).style.display = '';
+  document.getElementById(`tpl-row-${tplId}`).style.display = 'none';
+}
+function cancelTplEdit(tplId) {
+  document.getElementById(`tpl-edit-row-${tplId}`).style.display = 'none';
+  document.getElementById(`tpl-row-${tplId}`).style.display = '';
+}
+async function doTplUpdate(tplId, routeId) {
+  const name = document.getElementById(`tple-name-${tplId}`).value.trim();
+  const subj = document.getElementById(`tple-subj-${tplId}`).value.trim();
+  const body = document.getElementById(`tple-body-${tplId}`).value.trim();
+  if (!name || !subj || !body) { showBanner('Name, Betreff und Text sind erforderlich.', false); return; }
+  try {
+    await apiCall(`/admin/api/forwarding-templates/${tplId}`, 'PATCH', {
+      name, subject_template: subj, body_template: body
+    });
+    document.getElementById(`tplv-name-${tplId}`).textContent = name;
+    document.getElementById(`tplv-subj-${tplId}`).textContent = subj;
+    cancelTplEdit(tplId);
+    showBanner('Vorlage gespeichert ✓');
+  } catch (e) { showBanner(e.message, false); }
+}
+async function doDeleteTpl(tplId, routeId) {
+  try {
+    await apiCall(`/admin/api/forwarding-templates/${tplId}`, 'DELETE', {});
+    window.location.reload();
+  } catch (e) { showBanner(e.message, false); }
+}
+async function doSetDefault(tplId, routeId) {
+  try {
+    await apiCall(`/admin/api/forwarding-templates/${tplId}`, 'PATCH', { is_default: true });
+    window.location.reload();
+  } catch (e) { showBanner(e.message, false); }
+}
+</script>
+{% endblock %}

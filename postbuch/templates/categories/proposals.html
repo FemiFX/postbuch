@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Vorschläge</h1>
+    <p class="page-subtitle">Reiche neue Kategorien ein oder prüfe bestehende Vorschläge.</p>
+  </div>
+</div>
+
+<!-- Submit form + info row -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+
+  <!-- Submit a proposal -->
+  <div class="card mb-0">
+    <div class="card-header">
+      <h2 class="text-base font-semibold text-ink m-0">Neuen Vorschlag einreichen</h2>
+    </div>
+    <div class="card-body">
+      {% if current_user.role in ["editor", "admin", "super_admin"] %}
+      <form method="post" action="/admin/suggestions" class="form-stack">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div>
+          <label class="form-label">Kategoriename</label>
+          <input class="form-input" type="text" name="proposed_name" placeholder="z. B. Spendenquittung" required>
+        </div>
+        <div>
+          <label class="form-label">Begründung <span class="text-muted font-normal">(optional)</span></label>
+          <textarea class="form-textarea" name="proposal_reason" placeholder="Warum wird diese Kategorie benötigt?"></textarea>
+        </div>
+        <div><button class="btn" type="submit">Vorschlag einreichen</button></div>
+      </form>
+      {% else %}
+      <div class="py-4 text-center">
+        <p class="text-sm text-muted m-0">Sie haben nur Leserechte und können keine Vorschläge einreichen.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Workflow info -->
+  <div class="card mb-0" style="background:#FBFBF9;">
+    <div class="card-header">
+      <h2 class="text-base font-semibold text-ink m-0">Wie funktioniert es?</h2>
+    </div>
+    <div class="card-body">
+      <ol class="text-sm text-ink2 m-0 pl-4 grid gap-3" style="list-style:decimal;">
+        <li>Reiche einen Vorschlag mit Name und optionaler Begründung ein.</li>
+        <li>Ein Administrator prüft den Vorschlag und gibt ihn frei oder lehnt ihn ab.</li>
+        <li>Freigegebene Kategorien erscheinen sofort in der Korrespondenz-Zuordnung.</li>
+      </ol>
+      <div class="mt-4 pt-4 border-t border-line">
+        <a href="/admin/categories" class="text-sm text-brand font-medium hover:text-brand-h">
+          Alle aktiven Kategorien ansehen →
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Open proposals -->
+{% set open_proposals = proposals | selectattr("status", "equalto", "pending") | list %}
+{% set closed_proposals = proposals | rejectattr("status", "equalto", "pending") | list %}
+
+<div class="card mb-4">
+  <div class="card-header">
+    <h2 class="text-base font-semibold text-ink m-0">
+      Offene Vorschläge
+      {% if open_proposals %}<span class="chip chip-pending ml-2">{{ open_proposals | length }}</span>{% endif %}
+    </h2>
+  </div>
+  <table class="w-full border-collapse text-sm">
+    <thead>
+      <tr class="border-b border-line">
+        <th class="table-th">Name</th>
+        <th class="table-th">Begründung</th>
+        <th class="table-th">Eingereicht</th>
+        <th class="table-th">Aktion</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for proposal in open_proposals %}
+      <tr class="table-row">
+        <td class="table-td font-medium text-ink">{{ proposal.proposed_name }}</td>
+        <td class="table-td text-ink2">{{ proposal.proposal_reason or "–" }}</td>
+        <td class="table-td text-muted text-xs whitespace-nowrap">{{ proposal.created_at.strftime('%d.%m.%Y') if proposal.created_at else "–" }}</td>
+        <td class="table-td">
+          {% if current_user.role == "super_admin" %}
+          <div class="flex gap-2">
+            <form method="post" action="/admin/suggestions/{{ proposal.id }}/approve" class="m-0">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="btn-sm" type="submit">Freigeben</button>
+            </form>
+            <form method="post" action="/admin/suggestions/{{ proposal.id }}/reject" class="m-0">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="btn-danger-sm" type="submit">Ablehnen</button>
+            </form>
+          </div>
+          {% else %}
+          <span class="chip chip-pending">Ausstehend</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4" class="px-4 py-8 text-center text-muted text-sm">Keine offenen Vorschläge.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if closed_proposals %}
+<!-- Closed proposals -->
+<div class="card mb-0">
+  <div class="card-header">
+    <h2 class="text-base font-semibold text-ink m-0">Abgeschlossene Vorschläge</h2>
+  </div>
+  <table class="w-full border-collapse text-sm">
+    <thead>
+      <tr class="border-b border-line">
+        <th class="table-th">Name</th>
+        <th class="table-th">Status</th>
+        <th class="table-th">Begründung</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for proposal in closed_proposals %}
+      <tr class="table-row">
+        <td class="table-td font-medium text-ink">{{ proposal.proposed_name }}</td>
+        <td class="table-td">
+          {% if proposal.status == "approved" %}
+          <span class="chip chip-approved">Freigegeben</span>
+          {% elif proposal.status == "rejected" %}
+          <span class="chip chip-rejected">Abgelehnt</span>
+          {% else %}
+          <span class="chip chip-neutral">{{ proposal.status }}</span>
+          {% endif %}
+        </td>
+        <td class="table-td text-ink2 text-xs">{{ proposal.proposal_reason or "–" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Import-Monitor</h1>
+    <p class="page-subtitle">Überwache Importläufe, Fehler und Verarbeitung der Mailboxen.</p>
+  </div>
+  <form method="post" action="/api/import/run">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="btn">Import jetzt ausführen</button>
+  </form>
+</div>
+
+<!-- KPI row -->
+{% set error_runs = runs | selectattr("status", "in", ["error", "failed"]) | list %}
+{% set today_runs = runs | list %}
+{% set total_processed = runs | sum(attribute="messages_processed") %}
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:#EAF1EB;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4E6B57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+    </div>
+    <div>
+      <p class="kpi-label">Läufe gesamt</p>
+      <p class="kpi-value">{{ today_runs | length }}</p>
+      <p class="kpi-desc">In der Protokollliste</p>
+    </div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:#FBEAEA;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C05656" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+    </div>
+    <div>
+      <p class="kpi-label">Fehler</p>
+      <p class="kpi-value">{{ error_runs | length }}</p>
+      <p class="kpi-desc">Fehlgeschlagene Läufe</p>
+    </div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:#EAF3F8;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B6E91" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+    </div>
+    <div>
+      <p class="kpi-label">Verarbeitet</p>
+      <p class="kpi-value">{{ total_processed }}</p>
+      <p class="kpi-desc">Nachrichten verarbeitet</p>
+    </div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:#FBF3E3;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B7832F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+    </div>
+    <div>
+      <p class="kpi-label">Nachrichten</p>
+      <p class="kpi-value">{{ messages | length }}</p>
+      <p class="kpi-desc">Im Protokoll</p>
+    </div>
+  </div>
+</div>
+
+<!-- Import runs table -->
+<div class="card mb-4">
+  <div class="card-header">
+    <h2 class="text-base font-semibold text-ink m-0">Importläufe</h2>
+  </div>
+  <table class="w-full border-collapse text-sm">
+    <thead>
+      <tr class="border-b border-line">
+        <th class="table-th">Zeit</th>
+        <th class="table-th">Mailbox</th>
+        <th class="table-th">Status</th>
+        <th class="table-th">Verarbeitet</th>
+        <th class="table-th">Fehler / Notizen</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for run in runs %}
+      <tr class="table-row">
+        <td class="table-td text-muted text-xs whitespace-nowrap">
+          {{ run.started_at.strftime('%d.%m.%Y %H:%M') if run.started_at else '–' }}
+        </td>
+        <td class="table-td font-medium text-ink">{{ run.mailbox_name }}</td>
+        <td class="table-td">
+          {% if run.status in ["success", "completed"] %}
+          <span class="chip chip-done">{{ run.status }}</span>
+          {% elif run.status in ["error", "failed"] %}
+          <span class="chip chip-duplicate">{{ run.status }}</span>
+          {% elif run.status == "running" %}
+          <span class="chip chip-progress">{{ run.status }}</span>
+          {% else %}
+          <span class="chip chip-neutral">{{ run.status }}</span>
+          {% endif %}
+        </td>
+        <td class="table-td text-ink2">{{ run.messages_processed }}</td>
+        <td class="table-td text-xs text-err" style="max-width:340px; word-break:break-word;">
+          {% if run.notes %}
+          {% set _note = run.notes %}
+          {% set _sql_idx = _note.find('[SQL:') %}
+          {% if _sql_idx >= 0 %}{% set _note = _note[:_sql_idx] %}{% endif %}
+          {% set _short = _note.strip()[:240] %}
+          <details>
+            <summary class="cursor-pointer" style="white-space:normal;">{{ _short }}{% if _note|length > 240 %}…{% endif %}</summary>
+            <pre class="mt-2 text-[11px] text-ink2" style="white-space:pre-wrap; word-break:break-word; max-height:240px; overflow:auto;">{{ run.notes }}</pre>
+          </details>
+          {% else %}
+          –
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="px-4 py-8 text-center text-muted text-sm">Noch keine Importläufe.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Email message log -->
+<div class="card mb-4">
+  <div class="card-header">
+    <h2 class="text-base font-semibold text-ink m-0">E-Mail-Protokoll</h2>
+  </div>
+  <table class="w-full border-collapse text-sm">
+    <thead>
+      <tr class="border-b border-line">
+        <th class="table-th">Mailbox</th>
+        <th class="table-th">Betreff</th>
+        <th class="table-th">Status</th>
+        <th class="table-th">Fehlermeldung</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for message in messages %}
+      <tr class="table-row">
+        <td class="table-td text-ink2 text-xs whitespace-nowrap">{{ message.mailbox_name }}</td>
+        <td class="table-td font-medium text-ink">{{ message.subject or "–" }}</td>
+        <td class="table-td">
+          {% if message.processing_status == "processed" %}
+          <span class="chip chip-done">{{ message.processing_status }}</span>
+          {% elif message.processing_status in ["error", "failed", "invalid"] %}
+          <span class="chip chip-duplicate">{{ message.processing_status }}</span>
+          {% elif message.processing_status == "skipped_duplicate" %}
+          <span class="chip chip-neutral">{{ message.processing_status }}</span>
+          {% elif message.processing_status == "pending" %}
+          <span class="chip chip-progress">{{ message.processing_status }}</span>
+          {% else %}
+          <span class="chip chip-neutral">{{ message.processing_status }}</span>
+          {% endif %}
+        </td>
+        <td class="table-td text-xs text-err" style="max-width:320px; white-space:pre-wrap; word-break:break-word;">{{ message.error_message or '–' }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4" class="px-4 py-8 text-center text-muted text-sm">Keine Nachrichten protokolliert.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Users table -->
+<div class="card mb-0">
+  <div class="card-header">
+    <h2 class="text-base font-semibold text-ink m-0">Benutzer</h2>
+    {% if current_user.role == "super_admin" %}
+    <a href="/admin/users" class="btn-ghost-sm">Verwalten</a>
+    {% endif %}
+  </div>
+  <table class="w-full border-collapse text-sm">
+    <thead>
+      <tr class="border-b border-line">
+        <th class="table-th">Name</th>
+        <th class="table-th">E-Mail</th>
+        <th class="table-th">Rolle</th>
+        <th class="table-th">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+      <tr class="table-row">
+        <td class="table-td font-medium text-ink">{{ user.display_name }}</td>
+        <td class="table-td text-ink2 text-xs">{{ user.email or "–" }}</td>
+        <td class="table-td">
+          {% if user.role == "super_admin" %}
+          <span class="chip chip-duplicate">{{ user.role }}</span>
+          {% elif user.role == "admin" %}
+          <span class="chip chip-progress">{{ user.role }}</span>
+          {% else %}
+          <span class="chip chip-neutral">{{ user.role }}</span>
+          {% endif %}
+        </td>
+        <td class="table-td">
+          {% if user.is_active %}
+          <span class="chip chip-aktiv">Aktiv</span>
+          {% else %}
+          <span class="chip chip-inaktiv">Inaktiv</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4" class="px-4 py-8 text-center text-muted text-sm">Keine Benutzer vorhanden.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

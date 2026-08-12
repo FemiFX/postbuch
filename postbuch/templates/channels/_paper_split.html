@@ -1,0 +1,178 @@
+<style>
+  .paper-row {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 11px 16px;
+    border: 0;
+    border-bottom: 1px solid var(--c-line, #e5e7eb);
+    border-left: 2px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    font-family: inherit;
+  }
+  .paper-row:hover { background: #eef0f3; }
+  .paper-row.is-selected {
+    background: #fff;
+    border-left-color: var(--c-brand, #2F7D57);
+  }
+  .paper-row .row-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+    line-height: 1.3;
+    margin: 0 0 3px 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .paper-row .row-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #64748b;
+  }
+</style>
+
+<!-- Left: list pane -->
+<aside class="flex flex-col flex-shrink-0 border-r border-line" style="width:340px; background:#FBFBF9;">
+  <!-- Top bar: back to overview + add -->
+  <div class="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-line">
+    <a href="{{ channel_path }}{% if status_filter %}?status_filter={{ status_filter }}{% endif %}"
+       class="text-xs text-ink2 hover:text-ink flex items-center gap-1 font-medium">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Übersicht
+    </a>
+    {% if current_user.role in ["editor", "admin", "super_admin"] %}
+    <a class="btn-ghost flex items-center gap-1" href="/register/new" style="height:26px; padding:0 8px; font-size:0.75rem;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+      Eintrag
+    </a>
+    {% endif %}
+  </div>
+
+  <!-- Status tabs -->
+  <div class="flex gap-0 px-2 border-b border-line">
+    {% set statuses = [("", "Alle"), ("neu", "Neu"), ("in_bearbeitung", "Bearb."), ("erledigt", "Erledigt")] %}
+    {% for val, label in statuses %}
+    {% set tab_url = channel_path ~ "?selected_id=" ~ selected_item.id ~ ("&status_filter=" ~ val if val else "") %}
+    <a href="{{ tab_url }}"
+       class="px-3 py-2 text-xs font-medium border-b-2 transition-colors -mb-px whitespace-nowrap
+              {% if status_filter == val %}border-brand text-brand{% else %}border-transparent text-ink2 hover:text-ink hover:border-line-d{% endif %}">
+      {{ label }}
+    </a>
+    {% endfor %}
+  </div>
+
+  <!-- Item list -->
+  <div class="flex-1 overflow-y-auto" id="paper-list">
+    {% for item in items %}
+    <button type="button"
+            class="paper-row {% if selected_item and selected_item.id == item.id %}is-selected{% endif %}"
+            data-id="{{ item.id }}">
+      <div class="row-title">{{ item.title }}</div>
+      <div class="row-meta">
+        <span>{{ item.entry_date }}</span>
+        {% if item.status == "neu" %}
+        <span>·</span><span class="chip chip-neu" style="font-size:10px; padding:1px 6px; line-height:1.2;">Neu</span>
+        {% elif item.status == "in_bearbeitung" %}
+        <span>·</span><span class="chip chip-progress" style="font-size:10px; padding:1px 6px; line-height:1.2;">Bearb.</span>
+        {% elif item.status == "erledigt" %}
+        <span>·</span><span class="chip chip-done" style="font-size:10px; padding:1px 6px; line-height:1.2;">Erledigt</span>
+        {% endif %}
+        {% if item.category %}
+        <span>·</span><span style="color:#3A5C3A;">{{ item.category.name }}</span>
+        {% endif %}
+      </div>
+    </button>
+    {% else %}
+    <div class="px-5 py-12 text-center">
+      <p class="text-sm text-muted m-0">{{ channel_empty_label }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</aside>
+
+<!-- Right: detail pane -->
+<section class="flex-1 min-w-0 overflow-y-auto" style="background:#F6F7F5;">
+  <div id="paper-detail" class="px-6 py-5">
+    {% with item=selected_item, compact=true %}
+    {% include "correspondence/_detail_body.html" %}
+    {% endwith %}
+  </div>
+</section>
+
+<script>
+(function() {
+  const channelPath = {{ channel_path | tojson }};
+  const statusFilter = {{ (status_filter or "") | tojson }};
+  const list = document.getElementById('paper-list');
+  const detail = document.getElementById('paper-detail');
+
+  function buildUrl(selectedId) {
+    const params = new URLSearchParams();
+    if (statusFilter) params.set('status_filter', statusFilter);
+    if (selectedId !== null && selectedId !== undefined) params.set('selected_id', String(selectedId));
+    const qs = params.toString();
+    return channelPath + (qs ? ('?' + qs) : '');
+  }
+
+  function setSelected(id) {
+    list.querySelectorAll('.paper-row').forEach((row) => {
+      row.classList.toggle('is-selected', String(row.dataset.id) === String(id));
+    });
+  }
+
+  function executeScripts(container) {
+    container.querySelectorAll('script').forEach((oldScript) => {
+      const newScript = document.createElement('script');
+      for (const attr of oldScript.attributes) newScript.setAttribute(attr.name, attr.value);
+      newScript.textContent = oldScript.textContent;
+      oldScript.parentNode.replaceChild(newScript, oldScript);
+    });
+  }
+
+  async function loadDetail(id, opts) {
+    opts = opts || {};
+    const returnTo = buildUrl(id);
+    const url = '/register/' + encodeURIComponent(id) + '?partial=1&return_to=' + encodeURIComponent(returnTo);
+    try {
+      const res = await fetch(url, { headers: { 'Accept': 'text/html' } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const html = await res.text();
+      detail.innerHTML = html;
+      executeScripts(detail);
+      setSelected(id);
+      detail.parentElement.scrollTo({ top: 0, behavior: 'instant' });
+      if (!opts.skipPushState) {
+        history.pushState({ selectedId: id }, '', returnTo);
+      }
+    } catch (err) {
+      console.error('Failed to load detail', err);
+      detail.innerHTML = '<div class="card"><div class="card-body"><p class="text-sm text-muted m-0">Vorgang konnte nicht geladen werden.</p></div></div>';
+    }
+  }
+
+  list.addEventListener('click', (event) => {
+    const row = event.target.closest('.paper-row');
+    if (!row) return;
+    const id = Number(row.dataset.id);
+    if (!Number.isFinite(id)) return;
+    loadDetail(id);
+  });
+
+  window.addEventListener('popstate', (event) => {
+    const state = event.state || {};
+    const url = new URL(window.location.href);
+    const id = state.selectedId !== undefined ? state.selectedId : url.searchParams.get('selected_id');
+    if (id) {
+      loadDetail(Number(id), { skipPushState: true });
+    } else {
+      // Returning to a URL without selected_id means table view — full reload required
+      window.location.reload();
+    }
+  });
+})();
+</script>

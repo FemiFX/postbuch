@@ -1,0 +1,17 @@
+.env
+uploads 
+triage_redesign
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+.pytest_cache/
+# Database dumps must never be committed -- a real one was once committed to
+# this project's history. Scripts under scripts/ are deliberately still tracked.
+*.dump
+*.sql
+!scripts/*.sql
+.vscode/
+.idea/
+.venv/
+venv/

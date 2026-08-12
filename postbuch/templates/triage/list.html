@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Posteingang prüfen</h1>
+    <p class="page-subtitle">Eingehende E-Mails aus dem allgemeinen Postfach.</p>
+  </div>
+</div>
+
+<!-- Status filter pills -->
+<div class="flex gap-2 mb-4 flex-wrap">
+  {% set statuses = [("neu", "Neu"), ("in_bearbeitung", "In Bearbeitung"), ("wartet_aktion", "Wartet"), ("geschlossen", "Geschlossen")] %}
+  <a href="/channels/email-incoming"
+     class="px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors font-sans
+            {% if not status_filter %}bg-brand text-white border-brand{% else %}bg-paper text-ink2 border-line hover:border-brand-b hover:text-ink{% endif %}">
+    Alle offen
+  </a>
+  {% for val, label in statuses %}
+  <a href="/channels/email-incoming?status_filter={{ val }}"
+     class="px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors font-sans
+            {% if status_filter == val %}bg-brand text-white border-brand{% else %}bg-paper text-ink2 border-line hover:border-brand-b hover:text-ink{% endif %}">
+    {{ label }}
+  </a>
+  {% endfor %}
+</div>
+
+<!-- Table -->
+<div class="card mb-0">
+  <table class="w-full border-collapse text-sm">
+    <thead>
+      <tr class="border-b border-line">
+        <th class="table-th">Erhalten</th>
+        <th class="table-th">Betreff</th>
+        <th class="table-th">Von</th>
+        <th class="table-th">Status</th>
+        <th class="table-th">Anhänge</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr class="table-row cursor-pointer" onclick="window.location='/channels/email-incoming/{{ item.id }}'">
+        <td class="table-td text-muted text-xs whitespace-nowrap">
+          {{ item.received_at.strftime('%d.%m.%Y %H:%M') if item.received_at else '–' }}
+        </td>
+        <td class="table-td">
+          <a href="/channels/email-incoming/{{ item.id }}" class="font-medium text-ink hover:text-brand">{{ item.subject }}</a>
+        </td>
+        <td class="table-td text-ink2 text-xs">{{ item.sender or '–' }}</td>
+        <td class="table-td">
+          {% if item.status == "neu" %}
+          <span class="chip chip-neu">Neu</span>
+          {% elif item.status == "in_bearbeitung" %}
+          <span class="chip chip-progress">In Bearbeitung</span>
+          {% elif item.status == "wartet_aktion" %}
+          <span class="chip chip-pending">Wartet</span>
+          {% elif item.status == "geschlossen" %}
+          <span class="chip chip-done">Geschlossen</span>
+          {% else %}
+          <span class="chip chip-neutral">{{ item.status }}</span>
+          {% endif %}
+        </td>
+        <td class="table-td text-ink2 text-xs">
+          {% if item.has_attachments %}
+          <span class="chip chip-brand">{{ item.attachments | length }}</span>
+          {% else %}
+          <span class="text-muted">–</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="px-4 py-12 text-center">
+          <p class="text-sm text-muted m-0">Keine Einträge mit diesem Status.</p>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,319 @@
+{% extends "base.html" %}
+{% block content %}
+<meta name="csrf-token" content="{{ csrf_token }}">
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Benutzerverwaltung</h1>
+    <p class="page-subtitle">Benutzer vorab anlegen und Zugriffsstatus für OIDC steuern.</p>
+  </div>
+</div>
+
+{% if created %}
+<div class="flex items-center gap-3 rounded-xl px-4 py-3 mb-4 text-sm" style="background:#E8F5EC; border:1px solid rgba(47,125,87,0.25); color:#2F7D57;">
+  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+  <span class="font-medium">Benutzer wurde angelegt.</span>
+</div>
+{% endif %}
+
+{% if create_error %}
+<div class="flex items-center gap-3 rounded-xl px-4 py-3 mb-4 text-sm" style="background:#FBEAEA; border:1px solid rgba(192,86,86,0.25); color:#C05656;">
+  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+  <span class="font-medium">{{ create_error }}</span>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+  <div class="card-header">
+    <h2 class="text-base font-semibold text-ink m-0">Neuen Benutzer anlegen</h2>
+  </div>
+  <form method="post" action="/admin/users/new" class="card-body">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-3">
+      <div class="lg:col-span-1">
+        <label class="form-label text-xs mb-1">Name</label>
+        <input class="form-input w-full" style="height:36px;font-size:.84rem;" type="text" name="display_name" required value="{{ create_form.display_name }}">
+      </div>
+      <div class="lg:col-span-1">
+        <label class="form-label text-xs mb-1">E-Mail</label>
+        <input class="form-input w-full" style="height:36px;font-size:.84rem;" type="email" name="email" required value="{{ create_form.email }}">
+      </div>
+      <div class="lg:col-span-1">
+        <label class="form-label text-xs mb-1">Rolle</label>
+        <select class="form-select w-full" style="height:36px;font-size:.84rem;" name="role">
+          <option value="viewer" {% if create_form.role == "viewer" %}selected{% endif %}>viewer</option>
+          <option value="editor" {% if create_form.role == "editor" %}selected{% endif %}>editor</option>
+          <option value="admin" {% if create_form.role == "admin" %}selected{% endif %}>admin</option>
+          <option value="super_admin" {% if create_form.role == "super_admin" %}selected{% endif %}>super_admin</option>
+        </select>
+      </div>
+      <div class="lg:col-span-1">
+        <label class="form-label text-xs mb-1">Status</label>
+        <select class="form-select w-full" style="height:36px;font-size:.84rem;" name="is_active">
+          <option value="true" {% if create_form.is_active %}selected{% endif %}>aktiv</option>
+          <option value="false" {% if not create_form.is_active %}selected{% endif %}>inaktiv</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="mt-4 flex justify-end">
+      <button type="submit" class="btn" style="height:36px;padding:0 14px;border-radius:9px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></svg>
+        Benutzer anlegen
+      </button>
+    </div>
+  </form>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body py-4">
+    <form method="get" action="/admin/users" class="grid grid-cols-1 lg:grid-cols-6 gap-3">
+      <div class="lg:col-span-4">
+        <label class="form-label text-xs mb-1">Suche</label>
+        <input class="form-input w-full" style="height:36px;font-size:.84rem;" type="search" name="q" placeholder="Name oder E-Mail" value="{{ filters.q }}">
+      </div>
+      <div class="lg:col-span-1">
+        <label class="form-label text-xs mb-1">Status</label>
+        <select class="form-select w-full" style="height:36px;font-size:.84rem;" name="status_filter">
+          <option value="all" {% if filters.status == "all" %}selected{% endif %}>alle</option>
+          <option value="active" {% if filters.status == "active" %}selected{% endif %}>aktiv</option>
+          <option value="inactive" {% if filters.status == "inactive" %}selected{% endif %}>inaktiv</option>
+        </select>
+      </div>
+      <div class="lg:col-span-1 flex items-end gap-2">
+        <button type="submit" class="btn w-full" style="height:36px;padding:0 12px;border-radius:9px;">Filtern</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:#EAF3F8;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3B6E91" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6"/><path d="M23 11h-6"/></svg>
+    </div>
+    <div>
+      <p class="kpi-label">Benutzer gesamt</p>
+      <p class="kpi-value">{{ stats.total }}</p>
+    </div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:#EAF1EB;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4E6B57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+    </div>
+    <div>
+      <p class="kpi-label">Aktiv</p>
+      <p class="kpi-value">{{ stats.active }}</p>
+    </div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:#FBEAEA;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C05656" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" x2="9" y1="9" y2="15"/><line x1="9" x2="15" y1="9" y2="15"/></svg>
+    </div>
+    <div>
+      <p class="kpi-label">Inaktiv</p>
+      <p class="kpi-value">{{ stats.inactive }}</p>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-0">
+  <div class="card-header">
+    <h2 class="text-base font-semibold text-ink m-0">Benutzer</h2>
+  </div>
+  <table class="w-full border-collapse text-sm">
+    <thead>
+      <tr class="border-b border-line">
+        <th class="table-th">Name</th>
+        <th class="table-th">E-Mail</th>
+        <th class="table-th">Rolle</th>
+        <th class="table-th">Status</th>
+        <th class="table-th">Letzter Login</th>
+        <th class="table-th">Aktion</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+      <tr class="table-row">
+        <td class="table-td font-medium text-ink">{{ user.display_name }}</td>
+        <td class="table-td text-ink2 text-xs">{{ user.email }}</td>
+        <td class="table-td">
+          {% if user.role == "super_admin" %}
+          <span class="chip chip-duplicate">super_admin</span>
+          {% elif user.role == "admin" %}
+          <span class="chip chip-progress">admin</span>
+          {% elif user.role == "editor" %}
+          <span class="chip chip-ausgang">editor</span>
+          {% else %}
+          <span class="chip chip-neutral">viewer</span>
+          {% endif %}
+        </td>
+        <td class="table-td">
+          {% if user.is_active %}
+          <span class="chip chip-aktiv">Aktiv</span>
+          {% else %}
+          <span class="chip chip-inaktiv">Inaktiv</span>
+          {% endif %}
+        </td>
+        <td class="table-td text-ink2 text-xs">
+          {{ user.last_login_at.strftime('%d.%m.%Y %H:%M') if user.last_login_at else "Nie" }}
+        </td>
+        <td class="table-td">
+          <button
+            type="button"
+            class="btn-ghost-sm user-edit-trigger"
+            data-user-id="{{ user.id }}"
+            data-display-name="{{ user.display_name }}"
+            data-role="{{ user.role.value }}"
+            data-is-active="{{ 'true' if user.is_active else 'false' }}"
+          >
+            Bearbeiten
+          </button>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6" class="px-4 py-8 text-center text-muted text-sm">Keine Benutzer gefunden.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div id="user-edit-modal" class="hidden fixed inset-0 z-40">
+  <div class="absolute inset-0" style="background:rgba(19,26,22,0.42);" data-close-modal></div>
+  <div class="absolute inset-0 flex items-center justify-center p-4">
+    <div class="w-full max-w-xl rounded-2xl border border-line bg-paper shadow-xl">
+      <div class="px-5 py-4 border-b border-line flex items-center justify-between">
+        <h3 class="text-base font-semibold text-ink m-0">Benutzer bearbeiten</h3>
+        <button type="button" id="user-edit-close" class="btn-ghost h-8 w-8 p-0">×</button>
+      </div>
+      <form id="user-edit-form" class="px-5 py-4 flex flex-col gap-4">
+        <input type="hidden" id="edit-user-id">
+
+        <div>
+          <label class="form-label text-xs mb-1">Name</label>
+          <input id="edit-display-name" class="form-input w-full" style="height:36px;font-size:.84rem;" type="text" required>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="form-label text-xs mb-1">Rolle</label>
+            <select id="edit-role" class="form-select w-full" style="height:36px;font-size:.84rem;">
+              <option value="viewer">viewer</option>
+              <option value="editor">editor</option>
+              <option value="admin">admin</option>
+              <option value="super_admin">super_admin</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label text-xs mb-1">Status</label>
+            <select id="edit-is-active" class="form-select w-full" style="height:36px;font-size:.84rem;">
+              <option value="true">aktiv</option>
+              <option value="false">inaktiv</option>
+            </select>
+          </div>
+        </div>
+
+        <p id="user-edit-error" class="m-0 text-xs text-err hidden"></p>
+
+        <div class="flex justify-end gap-2">
+          <button type="button" class="btn-ghost h-9 px-4 text-sm" data-close-modal>Abbrechen</button>
+          <button id="user-edit-save" type="submit" class="btn h-9 px-4 text-sm">Speichern</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  function csrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.content || '';
+  }
+
+  function openUserEditModal(button) {
+    document.getElementById('edit-user-id').value = button.dataset.userId || '';
+    document.getElementById('edit-display-name').value = button.dataset.displayName || '';
+    document.getElementById('edit-role').value = button.dataset.role || 'viewer';
+    document.getElementById('edit-is-active').value = button.dataset.isActive || 'true';
+    document.getElementById('user-edit-error').classList.add('hidden');
+    document.getElementById('user-edit-modal').classList.remove('hidden');
+    document.getElementById('edit-display-name').focus();
+  }
+
+  function closeUserEditModal() {
+    document.getElementById('user-edit-modal').classList.add('hidden');
+    document.getElementById('user-edit-error').classList.add('hidden');
+  }
+
+  async function submitUserEdit(event) {
+    event.preventDefault();
+    const userId = document.getElementById('edit-user-id').value;
+    const displayName = document.getElementById('edit-display-name').value.trim();
+    const role = document.getElementById('edit-role').value;
+    const isActive = document.getElementById('edit-is-active').value === 'true';
+    const errorBox = document.getElementById('user-edit-error');
+    const saveButton = document.getElementById('user-edit-save');
+
+    if (!displayName) {
+      errorBox.textContent = 'Name ist erforderlich.';
+      errorBox.classList.remove('hidden');
+      return;
+    }
+
+    saveButton.disabled = true;
+    saveButton.textContent = 'Speichere...';
+    errorBox.classList.add('hidden');
+
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfToken(),
+        },
+        body: JSON.stringify({
+          display_name: displayName,
+          role,
+          is_active: isActive,
+        }),
+      });
+
+      if (!response.ok) {
+        let message = 'Benutzer konnte nicht gespeichert werden.';
+        try {
+          const payload = await response.json();
+          if (payload?.detail) message = payload.detail;
+        } catch {}
+        throw new Error(message);
+      }
+
+      window.location.reload();
+    } catch (error) {
+      errorBox.textContent = error.message || 'Benutzer konnte nicht gespeichert werden.';
+      errorBox.classList.remove('hidden');
+      saveButton.disabled = false;
+      saveButton.textContent = 'Speichern';
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.user-edit-trigger').forEach((button) => {
+      button.addEventListener('click', () => openUserEditModal(button));
+    });
+
+    document.querySelectorAll('[data-close-modal]').forEach((button) => {
+      button.addEventListener('click', closeUserEditModal);
+    });
+
+    document.getElementById('user-edit-close').addEventListener('click', closeUserEditModal);
+    document.getElementById('user-edit-form').addEventListener('submit', submitUserEdit);
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        closeUserEditModal();
+      }
+    });
+  });
+</script>
+{% endblock %}

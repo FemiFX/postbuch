@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Postbuch{% endblock %}</title>
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+    <link rel="shortcut icon" type="image/x-icon" href="/static/img/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'app':      '#F6F7F5',
+              'paper':    '#FFFFFF',
+              'sidebar':  '#FBFBF9',
+              'ink':      '#243128',
+              'ink2':     '#667066',
+              'muted':    '#8A9289',
+              'brand':    '#4E6B57',
+              'brand-h':  '#415A49',
+              'brand-s':  '#EAF1EB',
+              'brand-b':  '#D5E2D8',
+              'rust':     '#B86C3F',
+              'rust-s':   '#F6E7DE',
+              'line':     '#E7E5DF',
+              'line-d':   '#D8D5CD',
+              'ok':       '#2F7D57',
+              'ok-s':     '#E8F5EC',
+              'warn':     '#B7832F',
+              'warn-s':   '#FBF3E3',
+              'err':      '#C05656',
+              'err-s':    '#FBEAEA',
+              'inf':      '#3B6E91',
+              'inf-s':    '#EAF3F8',
+            },
+            fontFamily: {
+              sans:  ['DM Sans', 'system-ui', 'sans-serif'],
+              serif: ['DM Sans', 'system-ui', 'sans-serif'],
+            },
+            width:    { 68: '17rem' },
+            minWidth: { 68: '17rem' },
+          }
+        }
+      }
+    </script>
+    <style type="text/tailwindcss">
+      @layer base {
+        body {
+          font-family: 'DM Sans', system-ui, sans-serif;
+          background-color: #F6F7F5;
+          color: #243128;
+          min-height: 100vh;
+        }
+        * { box-sizing: border-box; }
+        a { color: inherit; text-decoration: none; }
+      }
+      @layer components {
+
+        /* ── Sidebar nav ── */
+        .nav-item {
+          @apply flex items-center gap-3 rounded-lg text-sm font-medium text-ink2 no-underline transition-colors duration-100;
+          height: 40px;
+          padding: 0 12px;
+          margin: 1px 8px;
+        }
+        .nav-item:hover { background: rgba(78,107,87,0.08); @apply text-ink; }
+        .nav-item.active { background: #EAF1EB; @apply text-ink; }
+        .nav-item.active svg { color: #4E6B57; }
+        .nav-item svg { @apply flex-shrink-0 text-muted; }
+        .nav-group { @apply text-[0.67rem] font-semibold tracking-[0.09em] uppercase text-muted m-0; padding: 20px 20px 6px; }
+
+        /* ── Badges ── */
+        .badge     { @apply ml-auto rounded-full min-w-[1.4em] text-center; font-size:10px; font-weight:600; line-height:1.2; padding:2px 7px; background:#B7832F; color:white; }
+        .badge-err { @apply ml-auto rounded-full min-w-[1.4em] text-center; font-size:10px; font-weight:600; line-height:1.2; padding:2px 7px; background:#C05656; color:white; }
+
+        /* ── Status / direction chips ── */
+        .chip          { @apply inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap; }
+        .chip-neu      { background:#FBF3E3; color:#B7832F; border:1px solid rgba(183,131,47,0.25); }
+        .chip-progress { background:#EAF3F8; color:#3B6E91; border:1px solid rgba(59,110,145,0.25); }
+        .chip-done     { background:#E8F5EC; color:#2F7D57; border:1px solid rgba(47,125,87,0.25); }
+        .chip-duplicate{ background:#FBEAEA; color:#C05656; border:1px solid rgba(192,86,86,0.25); }
+        .chip-neutral  { background:#F6F7F5; color:#667066; border:1px solid #E7E5DF; }
+        .chip-pending  { background:#FBF3E3; color:#B7832F; border:1px solid rgba(183,131,47,0.25); }
+        .chip-approved { background:#E8F5EC; color:#2F7D57; border:1px solid rgba(47,125,87,0.25); }
+        .chip-rejected { background:#FBEAEA; color:#C05656; border:1px solid rgba(192,86,86,0.25); }
+        .chip-eingang  { background:#EAF3F8; color:#3B6E91; border:1px solid rgba(59,110,145,0.25); }
+        .chip-ausgang  { background:#EAF1EB; color:#4E6B57; border:1px solid #D5E2D8; }
+        .chip-aktiv    { background:#E8F5EC; color:#2F7D57; border:1px solid rgba(47,125,87,0.25); }
+        .chip-inaktiv  { background:#F6F7F5; color:#8A9289; border:1px solid #E7E5DF; }
+
+        /* ── Buttons ── */
+        .btn {
+          @apply inline-flex items-center justify-center gap-1.5 bg-brand text-white px-3 text-xs font-semibold no-underline cursor-pointer border-0 transition-colors font-sans;
+          height:34px !important; border-radius:8px !important; font-size:0.78rem !important;
+        }
+        .btn:hover { background:#415A49; }
+        .btn-sm {
+          @apply inline-flex items-center justify-center gap-1 bg-brand text-white px-2.5 py-1 text-xs font-semibold no-underline cursor-pointer border-0 transition-colors font-sans;
+          border-radius:7px;
+        }
+        .btn-sm:hover { background:#415A49; }
+        .btn-ghost {
+          @apply inline-flex items-center justify-center gap-1.5 bg-paper text-ink2 border border-line-d px-3 text-xs font-semibold no-underline cursor-pointer transition-colors font-sans;
+          height:34px !important; border-radius:8px !important; font-size:0.78rem !important;
+        }
+        .btn-ghost:hover { background:#F6F7F5; @apply text-ink; }
+        .btn-ghost-sm {
+          @apply inline-flex items-center justify-center gap-1 bg-paper text-ink2 border border-line px-2.5 py-1 text-[0.72rem] font-semibold no-underline cursor-pointer transition-colors font-sans;
+          border-radius:7px;
+        }
+        .btn-ghost-sm:hover { background:#F6F7F5; @apply text-ink; }
+        .btn-danger-sm {
+          @apply inline-flex items-center justify-center gap-1 bg-paper text-err px-2.5 py-1 text-[0.72rem] font-semibold no-underline cursor-pointer transition-colors font-sans;
+          border:1px solid rgba(192,86,86,0.35); border-radius:7px;
+        }
+        .btn-danger-sm:hover { background:#FBEAEA; }
+
+        /* ── Cards ── */
+        .card        { @apply bg-paper border border-line mb-5 overflow-hidden; border-radius:10px; }
+        .card-body   { @apply p-4; }
+        .card-header { @apply px-4 py-3 border-b border-line flex items-center justify-between gap-4; }
+        .card-footer { @apply px-4 py-3 border-t border-line flex items-center gap-3; }
+
+        /* ── Table ── */
+        .table-th  { @apply text-left px-4 py-2.5 text-[0.68rem] font-bold text-muted uppercase tracking-wide; }
+        .table-td  { @apply px-4; padding-top:11px; padding-bottom:11px; }
+        .table-row { @apply border-b border-line transition-colors; }
+        .table-row:hover { background:rgba(78,107,87,0.04); }
+        .table-row:last-child { border-bottom:0; }
+
+        /* ── Forms ── */
+        .form-label    { @apply block text-xs font-semibold text-ink mb-1.5; }
+        .form-input    { @apply w-full px-3 bg-paper border border-line-d text-xs text-ink placeholder:text-muted transition-colors font-sans; height:36px; border-radius:8px; outline:none; }
+        .form-input:focus { border-color:#4E6B57; box-shadow:0 0 0 2px rgba(78,107,87,0.14); }
+        .form-textarea { @apply w-full px-3 py-2.5 bg-paper border border-line-d text-xs text-ink placeholder:text-muted transition-colors font-sans; min-height:104px; border-radius:8px; resize:vertical; outline:none; }
+        .form-textarea:focus { border-color:#4E6B57; box-shadow:0 0 0 2px rgba(78,107,87,0.14); }
+        .form-select   { @apply w-full px-3 bg-paper border border-line-d text-xs text-ink transition-colors font-sans cursor-pointer; height:36px; border-radius:8px; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%238A9289' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; padding-right:32px; outline:none; }
+        .form-select:focus { border-color:#4E6B57; box-shadow:0 0 0 2px rgba(78,107,87,0.14); }
+        .form-stack    { @apply grid gap-4; }
+
+        /* ── Detail key/value ── */
+        .detail-grid    { display:grid; grid-template-columns:max-content 1fr; @apply gap-x-5 gap-y-2.5 text-sm; }
+        .detail-grid dt { @apply font-semibold text-ink; }
+        .detail-grid dd { @apply text-ink2; word-break:break-word; }
+
+        /* ── OCR ── */
+        .ocr { white-space:pre-wrap; @apply bg-app border border-line rounded-xl p-4 min-h-[160px] text-sm text-ink2 font-sans; }
+
+        /* ── Page header ── */
+        .page-header   { @apply flex justify-between items-start gap-4 mb-6; }
+        .page-title    { @apply text-[1.65rem] font-bold text-ink m-0 font-sans leading-tight; }
+        .page-subtitle { @apply text-xs text-ink2 m-0 mt-1; }
+
+        /* ── KPI card ── */
+        .kpi-card  { @apply bg-paper border border-line rounded-2xl p-5 flex items-start gap-4; }
+        .kpi-icon  { @apply flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center; }
+        .kpi-label { @apply text-xs font-medium text-muted uppercase tracking-wide mb-0.5 m-0; }
+        .kpi-value { @apply text-3xl font-bold text-ink leading-none my-1 m-0; }
+        .kpi-desc  { @apply text-xs text-muted m-0; }
+
+        /* ── Quick action tile ── */
+        .quick-tile      { @apply flex items-center gap-3 p-3 rounded-xl border border-transparent hover:border-line hover:bg-app transition-colors no-underline text-ink; }
+        .quick-tile-icon { @apply w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0; }
+
+        /* ── Attention item ── */
+        .attention-item { @apply flex items-center gap-3 py-3 px-5 border-b border-line last:border-0; }
+
+        /* ── Misc list ── */
+        .plain-list    { @apply list-none p-0 m-0; }
+        .plain-list li { @apply py-2 border-b border-line; }
+        .plain-list li:last-child { border-bottom: 0; }
+
+        /* ── Collapsible sidebar ── */
+        .admin-sidebar {
+          background-color: #FBFBF9;
+          border-right: 1px solid #E7E5DF;
+          display: flex;
+          flex-direction: column;
+        }
+      }
+    </style>
+    <style>
+      /* ── Sidebar collapse styles (outside Tailwind @layer to avoid purge issues) ── */
+
+      /* Mobile: sidebar is an off-screen slide-in drawer */
+      @media (max-width: 1023px) {
+        .admin-sidebar {
+          position: fixed;
+          top: 0; left: 0;
+          height: 100vh;
+          width: 17rem;
+          transform: translateX(-100%);
+          transition: transform 0.22s ease;
+          z-index: 50;
+          overflow-y: auto;
+        }
+        .admin-sidebar.mobile-open {
+          transform: translateX(0);
+        }
+        .admin-layout {
+          margin-left: 0;
+        }
+        .sidebar-collapse-btn {
+          display: none;
+        }
+      }
+
+      /* Desktop: fixed sidebar with collapse support */
+      @media (min-width: 1024px) {
+        .admin-sidebar {
+          position: fixed;
+          top: 0; left: 0;
+          height: 100vh;
+          width: 17rem;
+          transition: width 0.2s ease;
+          z-index: 20;
+          overflow: hidden;
+        }
+        .admin-sidebar:hover {
+          overflow-y: auto;
+        }
+        .admin-sidebar.collapsed {
+          width: 4.5rem;
+          overflow: visible;
+        }
+        .admin-layout {
+          margin-left: 17rem;
+          transition: margin-left 0.2s ease;
+        }
+        .admin-layout.sidebar-collapsed {
+          margin-left: 4.5rem;
+        }
+
+        /* Preload state (before JS runs, prevent FOUC) */
+        html.sidebar-preload-collapsed:not(.sidebar-state-ready) .admin-sidebar {
+          width: 4.5rem;
+        }
+        html.sidebar-preload-collapsed:not(.sidebar-state-ready) .admin-layout {
+          margin-left: 4.5rem;
+        }
+
+        /* --- Collapsed: hide text labels --- */
+        .admin-sidebar.collapsed .sidebar-logo-text,
+        .admin-sidebar.collapsed .nav-item span,
+        .admin-sidebar.collapsed .nav-item .badge,
+        .admin-sidebar.collapsed .nav-item .badge-err,
+        .admin-sidebar.collapsed .nav-group,
+        .admin-sidebar.collapsed .sidebar-collapse-btn button span,
+        .admin-sidebar.collapsed .footer-text,
+        html.sidebar-preload-collapsed:not(.sidebar-state-ready) .admin-sidebar .sidebar-logo-text,
+        html.sidebar-preload-collapsed:not(.sidebar-state-ready) .admin-sidebar .nav-item span,
+        html.sidebar-preload-collapsed:not(.sidebar-state-ready) .admin-sidebar .nav-item .badge,
+        html.sidebar-preload-collapsed:not(.sidebar-state-ready) .admin-sidebar .nav-item .badge-err,
+        html.sidebar-preload-collapsed:not(.sidebar-state-ready) .admin-sidebar .nav-group,
+        html.sidebar-preload-collapsed:not(.sidebar-state-ready) .admin-sidebar .sidebar-collapse-btn button span,
+        html.sidebar-preload-collapsed:not(.sidebar-state-ready) .admin-sidebar .footer-text {
+          display: none !important;
+        }
+
+        /* --- Collapsed: center icons --- */
+        .admin-sidebar.collapsed .nav-item,
+        html.sidebar-preload-collapsed:not(.sidebar-state-ready) .admin-sidebar .nav-item {
+          justify-content: center;
+          padding: 0 0.75rem;
+          margin: 1px 4px;
+          gap: 0;
+        }
+        .admin-sidebar.collapsed .nav-item svg,
+        html.sidebar-preload-collapsed:not(.sidebar-state-ready) .admin-sidebar .nav-item svg {
+          margin-right: 0;
+        }
+
+        /* --- Collapsed: header --- */
+        .admin-sidebar.collapsed .sidebar-header {
+          justify-content: center;
+          padding: 1.25rem 0.5rem;
+        }
+        html.sidebar-preload-collapsed:not(.sidebar-state-ready) .admin-sidebar .sidebar-header {
+          justify-content: center;
+          padding: 1.25rem 0.5rem;
+        }
+
+        /* --- Collapsed: nav padding --- */
+        .admin-sidebar.collapsed nav,
+        html.sidebar-preload-collapsed:not(.sidebar-state-ready) .admin-sidebar nav {
+          padding-left: 0.25rem;
+          padding-right: 0.25rem;
+        }
+
+        /* --- Collapsed: footer --- */
+        .admin-sidebar.collapsed .sidebar-footer {
+          justify-content: center;
+          padding: 0.75rem 0.5rem;
+          gap: 0;
+        }
+
+        /* --- Collapse toggle button --- */
+        .sidebar-collapse-btn {
+          flex-shrink: 0;
+          padding: 0.5rem 0.75rem 0.75rem;
+          border-top: 1px solid #E7E5DF;
+        }
+        .sidebar-collapse-btn button {
+          width: 100%;
+          padding: 0.4rem 0.6rem;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          font-size: 0.78rem;
+          color: #8A9289;
+          transition: background-color 0.15s ease, color 0.15s ease;
+          cursor: pointer;
+          border: 0;
+          background: transparent;
+          white-space: nowrap;
+        }
+        .sidebar-collapse-btn button:hover {
+          background: rgba(78, 107, 87, 0.08);
+          color: #243128;
+        }
+        .admin-sidebar.collapsed .sidebar-collapse-btn button svg {
+          transform: rotate(180deg);
+        }
+
+        /* --- Tooltip for collapsed items --- */
+        #sidebar-item-tooltip {
+          position: fixed;
+          padding: 0.3rem 0.7rem;
+          background: #243128;
+          color: #fff;
+          border-radius: 6px;
+          font-size: 0.78rem;
+          font-weight: 500;
+          white-space: nowrap;
+          pointer-events: none;
+          z-index: 131;
+          opacity: 0;
+          transition: opacity 0.12s ease;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+        }
+        #sidebar-item-tooltip.visible {
+          opacity: 1;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-app text-ink">
+    <!-- Sidebar preload: read localStorage before paint to avoid FOUC -->
+    <script>
+      (function() {
+        try {
+          if (localStorage.getItem('sidebarCollapsed') === 'true') {
+            document.documentElement.classList.add('sidebar-preload-collapsed');
+          }
+        } catch(e) {}
+      })();
+    </script>
+
+    {% if current_user %}
+    <!-- Mobile overlay -->
+    <div id="sidebarOverlay" class="fixed inset-0 bg-black/40 z-40 hidden lg:hidden"></div>
+
+    <!-- ── SIDEBAR ──────────────────────────────────── -->
+    <aside id="sidebar" class="admin-sidebar">
+
+      <!-- Brand header -->
+      <div class="sidebar-header px-5 pt-5 pb-4 border-b border-line flex items-center flex-shrink-0">
+        <a class="block no-underline flex items-center gap-3 min-w-0 flex-1" href="/">
+          <div class="sidebar-logo-icon w-8 h-8 rounded-lg bg-brand flex items-center justify-center flex-shrink-0">
+            <span class="text-white text-sm font-bold font-serif leading-none">P</span>
+          </div>
+          <div class="sidebar-logo-text min-w-0">
+            <span class="text-[1.15rem] font-bold font-serif text-ink leading-tight block">Postbuch</span>
+            <p class="text-[0.68rem] text-muted mt-0.5 m-0 font-sans tracking-wide">Korrespondenzregister</p>
+          </div>
+        </a>
+        <!-- Mobile close button -->
+        <button id="closeSidebar" class="lg:hidden flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-muted hover:text-ink hover:bg-app transition-colors" aria-label="Menü schließen">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Nav -->
+      <nav class="flex-1 py-1 overflow-y-auto">
+
+        <!-- ÜBERSICHT -->
+        <p class="nav-group">Übersicht</p>
+
+        <a href="/" class="nav-item {% if request.url.path == '/' %}active{% endif %}" data-tooltip="Dashboard">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+          <span>Dashboard</span>
+        </a>
+
+        <a href="/mir-zugewiesen" class="nav-item {% if request.url.path == '/mir-zugewiesen' %}active{% endif %}" data-tooltip="Mir zugewiesen">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" x2="20" y1="8" y2="14"/><line x1="23" x2="17" y1="11" y2="11"/></svg>
+          <span>Mir zugewiesen</span>
+          <span class="badge" data-nav-count="nav_assigned_count" {% if not nav_assigned_count %}hidden{% endif %}>{{ nav_assigned_count or 0 }}</span>
+        </a>
+
+        <a href="/review" class="nav-item {% if request.url.path == '/review' %}active{% endif %}" data-tooltip="Zu prüfen">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <span>Zu prüfen</span>
+          <span class="badge" data-nav-count="nav_triage_count" {% if not nav_triage_count %}hidden{% endif %}>{{ nav_triage_count or 0 }}</span>
+        </a>
+
+        <!-- EINGANGSKANÄLE -->
+        <p class="nav-group">Eingangskanäle</p>
+
+        <a href="/channels/paper-incoming" class="nav-item {% if request.url.path.startswith('/channels/paper-incoming') %}active{% endif %}" data-tooltip="Papierpost Eingang">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+          <span>Papierpost Eingang</span>
+          <span class="badge" data-nav-count="nav_paper_incoming_count" {% if not nav_paper_incoming_count %}hidden{% endif %}>{{ nav_paper_incoming_count or 0 }}</span>
+        </a>
+
+        <a href="/channels/paper-outgoing" class="nav-item {% if request.url.path.startswith('/channels/paper-outgoing') %}active{% endif %}" data-tooltip="Papierpost Ausgang">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+          <span>Papierpost Ausgang</span>
+          <span class="badge" data-nav-count="nav_paper_outgoing_count" {% if not nav_paper_outgoing_count %}hidden{% endif %}>{{ nav_paper_outgoing_count or 0 }}</span>
+        </a>
+
+        <a href="/channels/email-incoming" class="nav-item {% if request.url.path.startswith('/channels/email-incoming') or request.url.path.startswith('/triage') %}active{% endif %}" data-tooltip="E-Mail Eingang">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+          <span>E-Mail Eingang</span>
+          <span class="badge" data-nav-count="nav_email_incoming_count" {% if not nav_email_incoming_count %}hidden{% endif %}>{{ nav_email_incoming_count or 0 }}</span>
+        </a>
+
+        <!-- REGISTER -->
+        <p class="nav-group">Register</p>
+
+        <a href="/register" class="nav-item {% if request.url.path.startswith('/register') %}active{% endif %}" data-tooltip="Korrespondenzregister">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>
+          <span>Korrespondenzregister</span>
+        </a>
+
+        <!-- WORKFLOWS -->
+        {% if current_user.role in ["admin", "super_admin"] %}
+        <p class="nav-group">Workflows</p>
+
+        <a href="/workflows/routes" class="nav-item {% if request.url.path.startswith('/workflows/routes') %}active{% endif %}" data-tooltip="Weiterleitungen">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg>
+          <span>Weiterleitungen</span>
+        </a>
+
+        <a href="/workflows/rules" class="nav-item {% if request.url.path.startswith('/workflows/rules') %}active{% endif %}" data-tooltip="Regeln">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+          <span>Regeln</span>
+        </a>
+        {% endif %}
+
+        <!-- VERWALTUNG -->
+        <p class="nav-group">Verwaltung</p>
+
+        <a href="/admin/categories" class="nav-item {% if request.url.path == '/admin/categories' %}active{% endif %}" data-tooltip="Kategorien">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" x2="7.01" y1="7" y2="7"/></svg>
+          <span>Kategorien</span>
+        </a>
+
+        {% if current_user.role == "super_admin" %}
+        <a href="/admin/users" class="nav-item {% if request.url.path == '/admin/users' %}active{% endif %}" data-tooltip="Benutzer">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" x2="20" y1="8" y2="14"/><line x1="23" x2="17" y1="11" y2="11"/></svg>
+          <span>Benutzer</span>
+        </a>
+        {% endif %}
+
+        {% if current_user.role in ["admin", "super_admin"] %}
+        <a href="/admin/import-monitor" class="nav-item {% if request.url.path == '/admin/import-monitor' or request.url.path == '/admin/imports' %}active{% endif %}" data-tooltip="Import-Monitor">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+          <span>Import-Monitor</span>
+        </a>
+        {% endif %}
+
+        {% if current_user.role == "super_admin" %}
+        <a href="/admin/mailboxes" class="nav-item {% if request.url.path == '/admin/mailboxes' %}active{% endif %}" data-tooltip="Mailboxen">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          <span>Mailboxen</span>
+        </a>
+        {% endif %}
+
+        {% if current_user.role in ["admin", "super_admin"] %}
+        <a href="/admin/audit" class="nav-item {% if request.url.path == '/admin/audit' %}active{% endif %}" data-tooltip="Audit-Log">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>
+          <span>Audit-Log</span>
+        </a>
+        {% endif %}
+
+      </nav>
+
+      <!-- Sidebar footer -->
+      <div class="sidebar-footer px-4 py-4 border-t border-line flex-shrink-0 flex items-center gap-3 min-w-0">
+        <div class="w-8 h-8 rounded-full bg-brand-s flex items-center justify-center text-brand text-sm font-semibold flex-shrink-0">
+          {{ current_user.display_name[0] | upper }}
+        </div>
+        <div class="footer-text flex-1 min-w-0">
+          <div class="text-sm font-medium text-ink truncate">{{ current_user.display_name }}</div>
+          <div class="text-[0.68rem] text-muted font-sans">{{ current_user.role }}</div>
+        </div>
+        <form method="post" action="/auth/logout" class="m-0 flex-shrink-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" title="Abmelden"
+            class="w-8 h-8 flex items-center justify-center rounded-lg text-muted hover:text-err hover:bg-err-s cursor-pointer border-0 bg-transparent transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+          </button>
+        </form>
+      </div>
+
+      <!-- Collapse toggle (desktop only) -->
+      <div class="sidebar-collapse-btn">
+        <button id="sidebarCollapseBtn" aria-label="Seitenleiste einklappen">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          <span>Einklappen</span>
+        </button>
+      </div>
+
+    </aside>
+
+    <!-- Tooltip for collapsed nav items -->
+    <div id="sidebar-item-tooltip" aria-hidden="true"></div>
+    {% endif %}
+
+    <!-- ── MAIN ─────────────────────────────────────── -->
+    <div class="{% if current_user %}admin-layout{% endif %} {% block wrapper_class %}flex flex-col min-h-screen{% endblock %}">
+      {% if current_user and not triage_mode|default(false) %}
+      <!-- Top bar -->
+      <header class="flex items-center justify-between gap-4 px-4 lg:px-6 border-b border-line bg-paper sticky top-0 z-30" style="height:64px">
+        <div class="flex items-center gap-3">
+          <!-- Mobile hamburger -->
+          <button id="openSidebar" class="lg:hidden flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-muted hover:text-ink hover:bg-app transition-colors" aria-label="Menü öffnen">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/></svg>
+          </button>
+          <div class="flex items-center gap-2">{% block topbar_left %}{% endblock %}</div>
+        </div>
+        <div class="flex items-center gap-3">
+          <form method="get" action="/register" class="relative hidden sm:block m-0">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" name="query" placeholder="Korrespondenz suchen …"
+              class="h-9 pl-9 pr-3 bg-app border border-line text-sm text-ink placeholder:text-muted w-64 font-sans transition-colors"
+              style="border-radius:10px; outline:none;"
+              onfocus="this.style.borderColor='#4E6B57';this.style.background='#fff';this.style.boxShadow='0 0 0 3px rgba(78,107,87,0.12)'"
+              onblur="this.style.borderColor='';this.style.background='';this.style.boxShadow=''">
+          </form>
+        </div>
+      </header>
+      {% endif %}
+
+      <main class="{% block main_class %}flex-1 max-w-[1440px] mx-auto w-full px-8 py-7{% endblock %}">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+
+    {% if current_user %}
+    <script>
+      (function() {
+        var sidebar = document.getElementById('sidebar');
+        var overlay = document.getElementById('sidebarOverlay');
+        var openBtn = document.getElementById('openSidebar');
+        var closeBtn = document.getElementById('closeSidebar');
+        var collapseBtn = document.getElementById('sidebarCollapseBtn');
+        var adminLayout = document.querySelector('.admin-layout');
+        var tooltip = document.getElementById('sidebar-item-tooltip');
+        var htmlEl = document.documentElement;
+
+        // ── Mobile sidebar ──
+        function openMobile() {
+          sidebar && sidebar.classList.add('mobile-open');
+          overlay && overlay.classList.remove('hidden');
+        }
+        function closeMobile() {
+          sidebar && sidebar.classList.remove('mobile-open');
+          overlay && overlay.classList.add('hidden');
+        }
+        openBtn && openBtn.addEventListener('click', openMobile);
+        closeBtn && closeBtn.addEventListener('click', closeMobile);
+        overlay && overlay.addEventListener('click', closeMobile);
+
+        // ── Desktop collapse ──
+        function setSidebarCollapsed(collapsed) {
+          if (!sidebar || !adminLayout) return;
+          sidebar.classList.toggle('collapsed', collapsed);
+          adminLayout.classList.toggle('sidebar-collapsed', collapsed);
+          try { localStorage.setItem('sidebarCollapsed', collapsed ? 'true' : 'false'); } catch(e) {}
+        }
+
+        var stored = null;
+        try { stored = localStorage.getItem('sidebarCollapsed'); } catch(e) {}
+        setSidebarCollapsed(stored === 'true');
+        htmlEl.classList.add('sidebar-state-ready');
+        htmlEl.classList.remove('sidebar-preload-collapsed');
+
+        collapseBtn && collapseBtn.addEventListener('click', function() {
+          var isCollapsed = sidebar && sidebar.classList.contains('collapsed');
+          setSidebarCollapsed(!isCollapsed);
+        });
+
+        // ── Tooltip for collapsed items ──
+        if (tooltip) {
+          document.querySelectorAll('.nav-item[data-tooltip]').forEach(function(item) {
+            item.addEventListener('mouseenter', function() {
+              if (!sidebar || !sidebar.classList.contains('collapsed')) return;
+              var label = item.getAttribute('data-tooltip');
+              if (!label) return;
+              tooltip.textContent = label;
+              var rect = item.getBoundingClientRect();
+              var sRect = sidebar.getBoundingClientRect();
+              tooltip.style.top = (rect.top + rect.height / 2) + 'px';
+              tooltip.style.left = (sRect.right + 10) + 'px';
+              tooltip.style.transform = 'translateY(-50%)';
+              tooltip.classList.add('visible');
+            });
+            item.addEventListener('mouseleave', function() {
+              tooltip.classList.remove('visible');
+            });
+          });
+        }
+      })();
+    </script>
+
+    <!-- ── Scroll active nav-item into view ─────────── -->
+    <script>
+      (function() {
+        function scrollActiveIntoView() {
+          var sidebar = document.getElementById('sidebar');
+          if (!sidebar) return;
+          if (sidebar.classList.contains('collapsed')) return;
+          var active = sidebar.querySelector('.nav-item.active');
+          if (!active) return;
+          var nav = active.closest('nav') || sidebar;
+          var aRect = active.getBoundingClientRect();
+          var nRect = nav.getBoundingClientRect();
+          if (aRect.top < nRect.top || aRect.bottom > nRect.bottom) {
+            active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+          }
+        }
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', scrollActiveIntoView);
+        } else {
+          scrollActiveIntoView();
+        }
+      })();
+    </script>
+
+    <!-- ── Live nav-count refresh ────────────────────── -->
+    <script>
+      (function() {
+        async function refreshNavCounts() {
+          try {
+            const res = await fetch('/api/nav-counts', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+            if (!res.ok) return;
+            const counts = await res.json();
+            Object.keys(counts).forEach(function(key) {
+              const el = document.querySelector('[data-nav-count="' + key + '"]');
+              if (!el) return;
+              const value = Number(counts[key]) || 0;
+              el.textContent = String(value);
+              el.hidden = value === 0;
+            });
+          } catch (e) { /* silent: counters stay at last known value */ }
+        }
+        window.refreshNavCounts = refreshNavCounts;
+
+        var pollTimer = null;
+        function startPolling() {
+          if (pollTimer !== null) return;
+          pollTimer = setInterval(refreshNavCounts, 30000);
+        }
+        function stopPolling() {
+          if (pollTimer === null) return;
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+
+        document.addEventListener('visibilitychange', function() {
+          if (document.hidden) {
+            stopPolling();
+          } else {
+            refreshNavCounts();
+            startPolling();
+          }
+        });
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', function() {
+            refreshNavCounts();
+            startPolling();
+          });
+        } else {
+          refreshNavCounts();
+          startPolling();
+        }
+      })();
+    </script>
+    {% endif %}
+
+    <!-- ── Global toast + unhandled-error handler ──── -->
+    <div id="global-toast"
+         class="hidden fixed left-1/2 -translate-x-1/2 z-[100] text-sm font-medium"
+         style="bottom:1.5rem; padding:.55rem 1rem; border-radius:10px; max-width:min(90vw, 600px); box-shadow:0 4px 14px rgba(0,0,0,0.08); white-space:normal;"
+         role="status" aria-live="polite"></div>
+    <script>
+      (function() {
+        var toastEl = document.getElementById('global-toast');
+        var hideTimer = null;
+        function paint(ok) {
+          if (ok) {
+            toastEl.style.background = '#E8F5EC';
+            toastEl.style.color = '#2F7D57';
+            toastEl.style.border = '1px solid rgba(47,125,87,.25)';
+          } else {
+            toastEl.style.background = '#FBEAEA';
+            toastEl.style.color = '#C05656';
+            toastEl.style.border = '1px solid rgba(192,86,86,.25)';
+          }
+        }
+        function show(message, ok) {
+          if (!toastEl) return;
+          if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+          toastEl.textContent = String(message || '');
+          paint(ok !== false);
+          toastEl.classList.remove('hidden');
+          hideTimer = setTimeout(function() {
+            toastEl.classList.add('hidden');
+            hideTimer = null;
+          }, ok === false ? 6000 : 3500);
+        }
+        // Global toast — pages can also override with their own showToast in a closure.
+        window.showToast = function(message, ok) { show(message, ok !== false); };
+
+        // Safety net: a fetch-based caller that throws and doesn't catch surfaces here.
+        window.addEventListener('unhandledrejection', function(event) {
+          var reason = event.reason;
+          var msg = (reason && reason.message) ? reason.message : String(reason || 'Unbekannter Fehler');
+          if (msg && msg !== 'Failed to fetch') show(msg, false);
+        });
+      })();
+    </script>
+
+  </body>
+</html>

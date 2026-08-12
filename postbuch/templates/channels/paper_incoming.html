@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block wrapper_class %}{% if selected_item %}flex flex-col h-screen{% else %}flex flex-col min-h-screen{% endif %}{% endblock %}
+{% block main_class %}{% if selected_item %}flex-1 min-h-0 overflow-hidden flex{% else %}flex-1 max-w-[1440px] mx-auto w-full px-8 py-7{% endif %}{% endblock %}
+
+{% block topbar_left %}{% if selected_item %}
+<div class="min-w-0">
+  <h1 class="text-sm font-semibold text-ink leading-tight m-0">Papierpost Eingang</h1>
+</div>
+{% endif %}{% endblock %}
+
+{% block content %}
+{% set channel_path = "/channels/paper-incoming" %}
+{% set channel_empty_label = "Keine eingehenden Vorgänge gefunden." %}
+{% if selected_item %}
+{% include "channels/_paper_split.html" %}
+{% else %}
+{% include "channels/_paper_table.html" %}
+{% endif %}
+{% endblock %}

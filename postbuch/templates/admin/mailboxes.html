@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Mailboxen</h1>
+    <p class="page-subtitle">IMAP-Kanäle und Verarbeitungsmodi zentral verwalten.</p>
+  </div>
+  <button onclick="openCreatePanel()" class="btn">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></svg>
+    Neue Mailbox
+  </button>
+</div>
+
+{% if smtp_saved %}
+<div class="flex items-center gap-3 rounded-xl px-4 py-3 mb-4 text-sm" style="background:#E8F5EC; border:1px solid rgba(47,125,87,0.25); color:#2F7D57;">
+  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+  <span class="font-medium">SMTP-Einstellungen gespeichert.</span>
+</div>
+{% endif %}
+
+{% if error == "name_exists" %}
+<div class="flex items-center gap-3 rounded-xl px-4 py-3 mb-4 text-sm" style="background:#FBEAEA; border:1px solid rgba(192,86,86,0.25); color:#C05656;">
+  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+  <span class="font-medium">Eine Mailbox mit diesem Namen existiert bereits.</span>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════
+     SMTP CARD
+═══════════════════════════════════════════════════════════ -->
+<div class="card mb-4" id="smtp-card">
+
+  <!-- Summary row (always visible) -->
+  <div class="card-header">
+    <div class="flex items-center gap-3 flex-1 min-w-0">
+      <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background:#F0EDE8;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#7B6B5A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+      </div>
+      <div class="min-w-0">
+        <p class="text-sm font-semibold text-ink m-0 leading-snug">SMTP-Ausgang</p>
+        <p class="text-xs text-muted m-0 mt-0.5 truncate">
+          {% if smtp_cfg.smtp_host %}
+            {{ smtp_cfg.smtp_username or smtp_cfg.smtp_from_address or '' }} · {{ smtp_cfg.smtp_host }}:{{ smtp_cfg.smtp_port }}
+          {% else %}
+            Nicht konfiguriert — Weiterleitungs-E-Mails werden nicht gesendet
+          {% endif %}
+        </p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 flex-shrink-0">
+      {% if smtp_cfg.smtp_host %}
+      <span class="chip chip-aktiv">Konfiguriert</span>
+      {% else %}
+      <span class="chip chip-inaktiv">Nicht konfiguriert</span>
+      {% endif %}
+      <button onclick="toggleSection('smtp-edit')" class="btn-ghost-sm">Bearbeiten</button>
+    </div>
+  </div>
+
+  <!-- Edit section (hidden by default) -->
+  <div id="smtp-edit" style="display:none;">
+    <form method="post" action="/admin/smtp-config">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      <div class="px-5 py-4" style="background:#FAFAF8;">
+        <p class="text-[0.7rem] font-semibold text-muted uppercase tracking-widest mb-3 m-0">Verbindung</p>
+        <div class="grid grid-cols-2 gap-x-5 gap-y-3">
+          <div>
+            <label class="form-label text-xs mb-1">SMTP-Host</label>
+            <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="text" name="smtp_host" value="{{ smtp_cfg.smtp_host or '' }}" placeholder="mail.example.com">
+          </div>
+          <div>
+            <label class="form-label text-xs mb-1">Port</label>
+            <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="number" name="smtp_port" value="{{ smtp_cfg.smtp_port }}">
+          </div>
+          <div>
+            <label class="form-label text-xs mb-1">Benutzername</label>
+            <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="text" name="smtp_username" value="{{ smtp_cfg.smtp_username or '' }}" placeholder="absender@example.com">
+          </div>
+          <div>
+            <label class="form-label text-xs mb-1">Passwort</label>
+            <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="password" name="smtp_password" placeholder="Unverändert lassen wenn leer">
+          </div>
+          <div>
+            <label class="form-label text-xs mb-1">Absenderadresse <span class="text-muted font-normal">(optional)</span></label>
+            <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="text" name="smtp_from_address" value="{{ smtp_cfg.smtp_from_address or '' }}" placeholder="Wie Benutzername wenn leer">
+          </div>
+          <div>
+            <label class="form-label text-xs mb-1">STARTTLS</label>
+            <select class="form-select w-full" style="height:34px;font-size:.8125rem;" name="smtp_use_tls">
+              <option value="true" {% if smtp_cfg.smtp_use_tls %}selected{% endif %}>Ja</option>
+              <option value="" {% if not smtp_cfg.smtp_use_tls %}selected{% endif %}>Nein</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-5 py-3 border-t border-line flex justify-end gap-2">
+        <button type="button" onclick="toggleSection('smtp-edit')" class="btn-ghost" style="height:34px;font-size:.8125rem;padding:0 12px;border-radius:8px;">Abbrechen</button>
+        <button type="submit" class="btn" style="height:34px;font-size:.8125rem;padding:0 14px;border-radius:8px;">Speichern</button>
+      </div>
+    </form>
+  </div>
+
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     MAILBOX CARDS
+═══════════════════════════════════════════════════════════ -->
+{% for mailbox in mailboxes %}
+<div class="card mb-3" id="mailbox-card-{{ mailbox.id }}">
+
+  <!-- Summary row -->
+  <div class="card-header" style="padding-top:14px;padding-bottom:14px;">
+    <div class="flex items-center gap-3 flex-1 min-w-0">
+      <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background:#EAF3F8;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#3B6E91" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-sm font-semibold text-ink leading-snug">{{ mailbox.name }}</span>
+          {% if mailbox.is_active %}<span class="chip chip-aktiv text-xs">Aktiv</span>{% else %}<span class="chip chip-inaktiv text-xs">Inaktiv</span>{% endif %}
+          <span class="chip text-xs" style="background:#EEF2F7;color:#3B6E91;">{{ mailbox.direction.value }}</span>
+          <span class="chip text-xs" style="background:#F0EDE8;color:#7B6B5A;">{{ mailbox.processing_mode.value }}</span>
+        </div>
+        <p class="text-xs text-muted m-0 mt-0.5 truncate">{{ mailbox.imap_username or '' }}{% if mailbox.imap_host %} · {{ mailbox.imap_host }}{% endif %}</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-1 flex-shrink-0">
+      <button onclick="toggleSection('mailbox-edit-{{ mailbox.id }}')" class="btn-ghost-sm">Bearbeiten</button>
+      {% if mailbox.is_active %}
+      <button onclick="if(confirm('Mailbox deaktivieren?')) document.getElementById('deactivate-{{ mailbox.id }}').submit()" class="btn-ghost-sm" style="color:var(--color-err);">Deaktivieren</button>
+      {% else %}
+      <button onclick="document.getElementById('activate-{{ mailbox.id }}').submit()" class="btn-ghost-sm" style="color:var(--color-ok);">Aktivieren</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Hidden activate/deactivate forms -->
+  <form id="deactivate-{{ mailbox.id }}" method="post" action="/admin/mailboxes/{{ mailbox.id }}/edit" style="display:none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="direction" value="{{ mailbox.direction.value }}">
+    <input type="hidden" name="processing_mode" value="{{ mailbox.processing_mode.value }}">
+    <input type="hidden" name="imap_host" value="{{ mailbox.imap_host or '' }}">
+    <input type="hidden" name="imap_port" value="{{ mailbox.imap_port }}">
+    <input type="hidden" name="imap_username" value="{{ mailbox.imap_username or '' }}">
+    <input type="hidden" name="imap_folder" value="{{ mailbox.imap_folder }}">
+    <input type="hidden" name="processed_folder" value="{{ mailbox.processed_folder }}">
+    <input type="hidden" name="imap_use_ssl" value="{{ 'true' if mailbox.imap_use_ssl else '' }}">
+    <input type="hidden" name="fetch_since" value="{{ mailbox.fetch_since.isoformat() if mailbox.fetch_since else '' }}">
+    <!-- is_active omitted → false -->
+  </form>
+  <form id="activate-{{ mailbox.id }}" method="post" action="/admin/mailboxes/{{ mailbox.id }}/edit" style="display:none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="direction" value="{{ mailbox.direction.value }}">
+    <input type="hidden" name="processing_mode" value="{{ mailbox.processing_mode.value }}">
+    <input type="hidden" name="imap_host" value="{{ mailbox.imap_host or '' }}">
+    <input type="hidden" name="imap_port" value="{{ mailbox.imap_port }}">
+    <input type="hidden" name="imap_username" value="{{ mailbox.imap_username or '' }}">
+    <input type="hidden" name="imap_folder" value="{{ mailbox.imap_folder }}">
+    <input type="hidden" name="processed_folder" value="{{ mailbox.processed_folder }}">
+    <input type="hidden" name="imap_use_ssl" value="{{ 'true' if mailbox.imap_use_ssl else '' }}">
+    <input type="hidden" name="fetch_since" value="{{ mailbox.fetch_since.isoformat() if mailbox.fetch_since else '' }}">
+    <input type="hidden" name="is_active" value="true">
+  </form>
+
+  <!-- Edit section (hidden by default) -->
+  <div id="mailbox-edit-{{ mailbox.id }}" style="display:none;" class="border-t border-line">
+    <form method="post" action="/admin/mailboxes/{{ mailbox.id }}/edit">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      <div class="grid grid-cols-2 divide-x divide-line">
+
+        <!-- LEFT: Identität + Verarbeitung -->
+        <div class="flex flex-col divide-y divide-line">
+          <div class="px-5 py-4" style="background:#FAFAF8;">
+            <p class="text-[0.7rem] font-semibold text-muted uppercase tracking-widest mb-3 m-0">Identität</p>
+            <div class="flex flex-col gap-3">
+              <div>
+                <label class="form-label text-xs mb-1">Name</label>
+                <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="text" name="name" value="{{ mailbox.name }}" required>
+              </div>
+              <div>
+                <label class="form-label text-xs mb-1">Benutzername (E-Mail)</label>
+                <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="text" name="imap_username" value="{{ mailbox.imap_username or '' }}" required>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="form-label text-xs mb-1">Richtung</label>
+                  <select class="form-select w-full" style="height:34px;font-size:.8125rem;" name="direction">
+                    {% for d in directions %}
+                    <option value="{{ d.value }}" {% if d == mailbox.direction %}selected{% endif %}>{{ d.value }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="flex items-end pb-0.5">
+                  <label class="flex items-center gap-2 cursor-pointer text-xs font-medium text-ink">
+                    <input type="checkbox" name="is_active" value="true" {% if mailbox.is_active %}checked{% endif %}
+                      style="width:15px;height:15px;border-radius:3px;accent-color:#4E6B57;cursor:pointer;">
+                    Aktiv
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="px-5 py-4" style="background:#FAFAF8;">
+            <p class="text-[0.7rem] font-semibold text-muted uppercase tracking-widest mb-3 m-0">Verarbeitung</p>
+            <div class="flex flex-col gap-3">
+              <div>
+                <label class="form-label text-xs mb-1">Verarbeitungsmodus</label>
+                <select class="form-select w-full" style="height:34px;font-size:.8125rem;" name="processing_mode">
+                  {% for m in processing_modes %}
+                  <option value="{{ m.value }}" {% if m == mailbox.processing_mode %}selected{% endif %}>{{ m.value }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="form-label text-xs mb-1">Nachrichten abrufen ab <span class="text-muted font-normal">(leer = alle)</span></label>
+                <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="date" name="fetch_since" value="{{ mailbox.fetch_since.isoformat() if mailbox.fetch_since else '' }}">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Verbindung -->
+        <div class="px-5 py-4" style="background:#FAFAF8;">
+          <p class="text-[0.7rem] font-semibold text-muted uppercase tracking-widest mb-3 m-0">Verbindung</p>
+          <div class="flex flex-col gap-3">
+            <div class="grid grid-cols-3 gap-3">
+              <div class="col-span-2">
+                <label class="form-label text-xs mb-1">IMAP-Host</label>
+                <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="text" name="imap_host" value="{{ mailbox.imap_host or '' }}" required>
+              </div>
+              <div>
+                <label class="form-label text-xs mb-1">Port</label>
+                <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="number" name="imap_port" value="{{ mailbox.imap_port }}" required>
+              </div>
+            </div>
+            <div>
+              <label class="form-label text-xs mb-1">Passwort</label>
+              <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="password" name="imap_password" placeholder="Unverändert lassen wenn leer">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="form-label text-xs mb-1">IMAP-Ordner</label>
+                <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="text" name="imap_folder" value="{{ mailbox.imap_folder }}" required>
+              </div>
+              <div>
+                <label class="form-label text-xs mb-1">Verarbeiteter Ordner</label>
+                <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="text" name="processed_folder" value="{{ mailbox.processed_folder }}" required>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 mt-1">
+              <label class="flex items-center gap-2 cursor-pointer text-xs font-medium text-ink">
+                <input type="checkbox" name="imap_use_ssl" value="true" {% if mailbox.imap_use_ssl %}checked{% endif %}
+                  style="width:15px;height:15px;border-radius:3px;accent-color:#4E6B57;cursor:pointer;">
+                SSL verwenden
+              </label>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Action row -->
+      <div class="px-5 py-3 border-t border-line flex justify-end gap-2">
+        <button type="button" onclick="toggleSection('mailbox-edit-{{ mailbox.id }}')" class="btn-ghost" style="height:34px;font-size:.8125rem;padding:0 12px;border-radius:8px;">Abbrechen</button>
+        <button type="submit" class="btn" style="height:34px;font-size:.8125rem;padding:0 14px;border-radius:8px;">Speichern</button>
+      </div>
+
+    </form>
+  </div>
+
+</div>
+{% else %}
+<div class="card mb-3">
+  <div class="card-body py-10 text-center">
+    <p class="text-sm text-muted m-0">Keine Mailboxen konfiguriert. Klicken Sie auf "Neue Mailbox".</p>
+  </div>
+</div>
+{% endfor %}
+
+
+<!-- ══════════════════════════════════════════════════════════
+     CREATE PANEL (hidden by default)
+═══════════════════════════════════════════════════════════ -->
+<div id="create-panel" style="display:none;" class="card mt-4">
+  <div class="card-header">
+    <div>
+      <h2 class="text-sm font-semibold text-ink m-0">Neue Mailbox</h2>
+      <p class="text-xs text-muted m-0 mt-0.5">Neues IMAP-Konto konfigurieren</p>
+    </div>
+    <button onclick="closeCreatePanel()" class="btn-ghost-sm">Abbrechen</button>
+  </div>
+
+  <form method="post" action="/admin/mailboxes/new">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <div class="grid grid-cols-2 divide-x divide-line border-t border-line">
+
+      <!-- LEFT -->
+      <div class="flex flex-col divide-y divide-line">
+        <div class="px-5 py-4" style="background:#FAFAF8;">
+          <p class="text-[0.7rem] font-semibold text-muted uppercase tracking-widest mb-3 m-0">Identität</p>
+          <div class="flex flex-col gap-3">
+            <div>
+              <label class="form-label text-xs mb-1">Name <span class="text-err">*</span></label>
+              <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="text" name="name" placeholder="z. B. posteingang" required>
+            </div>
+            <div>
+              <label class="form-label text-xs mb-1">Benutzername (E-Mail) <span class="text-err">*</span></label>
+              <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="text" name="imap_username" placeholder="konto@example.com" required>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="form-label text-xs mb-1">Richtung</label>
+                <select class="form-select w-full" style="height:34px;font-size:.8125rem;" name="direction">
+                  {% for d in directions %}
+                  <option value="{{ d.value }}">{{ d.value }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="flex items-end pb-0.5">
+                <label class="flex items-center gap-2 cursor-pointer text-xs font-medium text-ink">
+                  <input type="checkbox" name="is_active" value="true" checked
+                    style="width:15px;height:15px;border-radius:3px;accent-color:#4E6B57;cursor:pointer;">
+                  Aktiv
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-5 py-4" style="background:#FAFAF8;">
+          <p class="text-[0.7rem] font-semibold text-muted uppercase tracking-widest mb-3 m-0">Verarbeitung</p>
+          <div class="flex flex-col gap-3">
+            <div>
+              <label class="form-label text-xs mb-1">Verarbeitungsmodus</label>
+              <select class="form-select w-full" style="height:34px;font-size:.8125rem;" name="processing_mode">
+                {% for m in processing_modes %}
+                <option value="{{ m.value }}">{{ m.value }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="form-label text-xs mb-1">Nachrichten abrufen ab <span class="text-muted font-normal">(leer = alle)</span></label>
+              <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="date" name="fetch_since">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT -->
+      <div class="px-5 py-4" style="background:#FAFAF8;">
+        <p class="text-[0.7rem] font-semibold text-muted uppercase tracking-widest mb-3 m-0">Verbindung</p>
+        <div class="flex flex-col gap-3">
+          <div class="grid grid-cols-3 gap-3">
+            <div class="col-span-2">
+              <label class="form-label text-xs mb-1">IMAP-Host <span class="text-err">*</span></label>
+              <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="text" name="imap_host" placeholder="mail.example.com" required>
+            </div>
+            <div>
+              <label class="form-label text-xs mb-1">Port</label>
+              <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="number" name="imap_port" value="993" required>
+            </div>
+          </div>
+          <div>
+            <label class="form-label text-xs mb-1">Passwort <span class="text-err">*</span></label>
+            <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="password" name="imap_password" required>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="form-label text-xs mb-1">IMAP-Ordner</label>
+              <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="text" name="imap_folder" value="INBOX" required>
+            </div>
+            <div>
+              <label class="form-label text-xs mb-1">Verarbeiteter Ordner</label>
+              <input class="form-input w-full" style="height:34px;font-size:.8125rem;" type="text" name="processed_folder" value="Processed" required>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 mt-1">
+            <label class="flex items-center gap-2 cursor-pointer text-xs font-medium text-ink">
+              <input type="checkbox" name="imap_use_ssl" value="true" checked
+                style="width:15px;height:15px;border-radius:3px;accent-color:#4E6B57;cursor:pointer;">
+              SSL verwenden
+            </label>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="px-5 py-3 border-t border-line flex justify-end gap-2">
+      <button type="button" onclick="closeCreatePanel()" class="btn-ghost" style="height:34px;font-size:.8125rem;padding:0 12px;border-radius:8px;">Abbrechen</button>
+      <button type="submit" class="btn" style="height:34px;font-size:.8125rem;padding:0 14px;border-radius:8px;">Mailbox anlegen</button>
+    </div>
+  </form>
+</div>
+
+<script>
+function toggleSection(id) {
+  const el = document.getElementById(id);
+  el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+function openCreatePanel() {
+  const p = document.getElementById('create-panel');
+  p.style.display = '';
+  p.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function closeCreatePanel() {
+  document.getElementById('create-panel').style.display = 'none';
+}
+// Auto-open edit section if redirected back after error
+{% if error == "name_exists" %}
+openCreatePanel();
+{% endif %}
+</script>
+{% endblock %}

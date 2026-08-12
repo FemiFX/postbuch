@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Korrespondenzregister</h1>
+    <p class="page-subtitle">Suche, filtere und prüfe eingehende und ausgehende Vorgänge im zentralen Register.</p>
+  </div>
+  {% if current_user.role in ["editor", "admin", "super_admin"] %}
+  <a class="btn" href="/register/new">Ausgang erfassen</a>
+  {% endif %}
+</div>
+
+<!-- Filter toolbar -->
+<div class="card mb-4">
+  <div class="p-4">
+    <form method="get" class="flex gap-3 flex-wrap items-center"
+          onsubmit="(function(f){ f.querySelectorAll('input,select').forEach(function(el){ if(!el.value) el.disabled=true; }); })(this)">
+      <div class="relative flex-1 min-w-[200px]">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input class="form-input pl-9" type="search" name="query" placeholder="Suche in Titel oder OCR …" value="{{ filters.query or '' }}">
+      </div>
+      <select class="form-select" style="width:150px;" name="direction">
+        <option value="">Alle Richtungen</option>
+        <option value="incoming" {% if filters.direction == "incoming" %}selected{% endif %}>Eingang</option>
+        <option value="outgoing" {% if filters.direction == "outgoing" %}selected{% endif %}>Ausgang</option>
+      </select>
+      <select class="form-select" style="width:160px;" name="status_filter">
+        <option value="">Alle Stati</option>
+        <option value="neu" {% if filters.status == "neu" %}selected{% endif %}>Neu</option>
+        <option value="in_bearbeitung" {% if filters.status == "in_bearbeitung" %}selected{% endif %}>In Bearbeitung</option>
+        <option value="erledigt" {% if filters.status == "erledigt" %}selected{% endif %}>Erledigt</option>
+      </select>
+      <select class="form-select" style="width:170px;" name="category_id">
+        <option value="">Alle Kategorien</option>
+        {% for category in categories %}
+        <option value="{{ category.id }}" {% if filters.category_id == category.id %}selected{% endif %}>{{ category.name }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn" type="submit">Filtern</button>
+      {% if filters.query or filters.direction or filters.status or filters.category_id %}
+      <a href="/register" class="btn-ghost">Zurücksetzen</a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="card mb-0">
+  <table class="w-full border-collapse text-sm">
+    <thead>
+      <tr class="border-b border-line">
+        <th class="table-th">Datum</th>
+        <th class="table-th">Richtung</th>
+        <th class="table-th">Titel</th>
+        <th class="table-th">Kategorie</th>
+        <th class="table-th">Status</th>
+        <th class="table-th">Quelle</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr class="table-row cursor-pointer" onclick="window.location='{{ item.detail_url }}'">
+        <td class="table-td text-muted whitespace-nowrap text-xs">{{ item.entry_date }}</td>
+        <td class="table-td">
+          {% if item.direction == "incoming" %}
+          <span class="chip chip-eingang">Eingang</span>
+          {% else %}
+          <span class="chip chip-ausgang">Ausgang</span>
+          {% endif %}
+        </td>
+        <td class="table-td">
+          <a href="{{ item.detail_url }}" class="font-medium text-ink hover:text-brand">{{ item.title }}</a>
+          {% if item.is_duplicate_flag %}<span class="chip chip-duplicate ml-2">Duplikat</span>{% endif %}
+        </td>
+        <td class="table-td text-ink2 text-xs">{{ item.category.name if item.category else "–" }}</td>
+        <td class="table-td">
+          {% if item.status == "neu" %}
+          <span class="chip chip-neu">Neu</span>
+          {% elif item.status == "in_bearbeitung" %}
+          <span class="chip chip-progress">In Bearbeitung</span>
+          {% elif item.status == "erledigt" %}
+          <span class="chip chip-done">Erledigt</span>
+          {% else %}
+          <span class="chip chip-neutral">{{ item.status }}</span>
+          {% endif %}
+        </td>
+        <td class="table-td text-muted text-xs">{{ item.source_mailbox or item.source_type or "–" }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6" class="px-4 py-12 text-center">
+          <p class="text-sm text-muted m-0">Keine Korrespondenz gefunden.</p>
+          {% if filters.query or filters.direction or filters.status %}
+          <p class="text-xs text-muted mt-2 m-0"><a href="/register" class="text-brand hover:text-brand-h">Filter zurücksetzen</a></p>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

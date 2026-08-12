@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block topbar_left %}
+<a href="/register" class="btn-ghost" style="height:36px; font-size:0.8125rem; padding:0 12px; border-radius:8px;">
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+  Korrespondenzregister
+</a>
+{% endblock %}
+
+{% block content %}
+{% include "correspondence/_detail_body.html" %}
+{% endblock %}

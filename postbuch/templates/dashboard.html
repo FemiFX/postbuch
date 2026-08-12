@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-subtitle">Überblick über neue Eingänge, offene Prüfungen und den Status der Korrespondenz.</p>
+  </div>
+  {% if current_user.role in ["editor", "admin", "super_admin"] %}
+  <a class="btn" href="/register/new">Ausgang erfassen</a>
+  {% endif %}
+</div>
+
+<!-- KPI row -->
+<div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:#FBF3E3;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B7832F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+    </div>
+    <div>
+      <p class="kpi-label">Offen</p>
+      <p class="kpi-value">{{ counts.new }}</p>
+      <p class="kpi-desc">Unbearbeitete Vorgänge</p>
+    </div>
+  </div>
+  <a href="/register?status_filter=in_bearbeitung" class="kpi-card no-underline hover:border-brand-b transition-colors">
+    <div class="kpi-icon" style="background:#EAF3F8;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B6E91" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </div>
+    <div>
+      <p class="kpi-label">In Bearbeitung</p>
+      <p class="kpi-value">{{ counts.in_progress }}</p>
+      <p class="kpi-desc">Aktuell in Bearbeitung</p>
+    </div>
+  </a>
+  <a href="/channels/paper-incoming" class="kpi-card no-underline hover:border-brand-b transition-colors">
+    <div class="kpi-icon" style="background:#EAF3F8;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B6E91" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+    </div>
+    <div>
+      <p class="kpi-label">Eingehend</p>
+      <p class="kpi-value">{{ counts.incoming }}</p>
+      <p class="kpi-desc">Erfasste Eingänge</p>
+    </div>
+  </a>
+  <a href="/channels/paper-outgoing" class="kpi-card no-underline hover:border-brand-b transition-colors">
+    <div class="kpi-icon" style="background:#EAF1EB;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4E6B57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+    </div>
+    <div>
+      <p class="kpi-label">Ausgehend</p>
+      <p class="kpi-value">{{ counts.outgoing }}</p>
+      <p class="kpi-desc">Neu erfasste Ausgänge</p>
+    </div>
+  </a>
+  <a href="/mir-zugewiesen" class="kpi-card no-underline hover:border-brand-b transition-colors">
+    <div class="kpi-icon" style="background:#EDE9F6;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6B5B9A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" x2="20" y1="8" y2="14"/><line x1="23" x2="17" y1="11" y2="11"/></svg>
+    </div>
+    <div>
+      <p class="kpi-label">Mir zugewiesen</p>
+      <p class="kpi-value">{{ assigned_count }}</p>
+      <p class="kpi-desc">Aktive Arbeitsvorgänge</p>
+    </div>
+  </a>
+</div>
+
+<!-- Main body: two rows -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
+
+  <!-- Left 2/3: Attention + Queue snapshot -->
+  <div class="lg:col-span-2 grid gap-5 content-start">
+
+    <!-- Eingangskanal-Snapshot -->
+    <div class="card mb-0">
+      <div class="card-header">
+        <h2 class="text-base font-semibold text-ink m-0">Eingangskanäle</h2>
+        <a href="/review" class="text-xs text-brand font-medium hover:text-brand-h">Alle prüfen →</a>
+      </div>
+      <div>
+        <a href="/channels/paper-incoming" class="attention-item no-underline hover:bg-app transition-colors">
+          <div class="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center" style="background:#EAF3F8;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3B6E91" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-ink m-0">Papierpost Eingang
+              {% if nav_paper_incoming_count %}<span class="ml-1.5 text-[0.6rem] font-bold px-1.5 py-0.5 rounded-full" style="background:#3B6E91; color:white;">{{ nav_paper_incoming_count }} offen</span>{% endif %}
+            </p>
+            <p class="text-xs text-muted m-0">Gescannte eingehende Post prüfen und registrieren</p>
+          </div>
+          <span class="text-xs text-muted flex-shrink-0">→</span>
+        </a>
+        <a href="/channels/paper-outgoing" class="attention-item no-underline hover:bg-app transition-colors">
+          <div class="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center" style="background:#EAF1EB;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4E6B57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-ink m-0">Papierpost Ausgang
+              {% if nav_paper_outgoing_count %}<span class="ml-1.5 text-[0.6rem] font-bold px-1.5 py-0.5 rounded-full" style="background:#4E6B57; color:white;">{{ nav_paper_outgoing_count }} offen</span>{% endif %}
+            </p>
+            <p class="text-xs text-muted m-0">Ausgehende Papierpost erfassen und im Register abschließen</p>
+          </div>
+          <span class="text-xs text-muted flex-shrink-0">→</span>
+        </a>
+        <a href="/channels/email-incoming" class="attention-item no-underline hover:bg-app transition-colors">
+          <div class="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center" style="background:#FBF3E3;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B7832F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-ink m-0">E-Mail Eingang
+              {% if nav_email_incoming_count %}<span class="ml-1.5 text-[0.6rem] font-bold px-1.5 py-0.5 rounded-full" style="background:#B7832F; color:white;">{{ nav_email_incoming_count }} offen</span>{% endif %}
+            </p>
+            <p class="text-xs text-muted m-0">Operative E-Mails prüfen, weiterleiten und in Workflows überführen</p>
+          </div>
+          <span class="text-xs text-muted flex-shrink-0">→</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Braucht Aufmerksamkeit -->
+    <div class="card mb-0">
+      <div class="card-header">
+        <h2 class="text-base font-semibold text-ink m-0">Braucht Aufmerksamkeit</h2>
+      </div>
+      <div>
+        {% if nav_triage_count %}
+        <div class="attention-item">
+          <div class="w-2 h-2 rounded-full flex-shrink-0" style="background:#B7832F;"></div>
+          <div class="text-sm flex-1">
+            <span class="font-medium">{{ nav_triage_count }} Vorgänge</span>
+            <span class="text-ink2"> in den Eingangskanälen sind offen</span>
+          </div>
+          <a href="/review" class="text-xs text-brand font-medium hover:text-brand-h flex-shrink-0">Öffnen →</a>
+        </div>
+        {% endif %}
+        {% if not nav_triage_count %}
+        <div class="px-5 py-8 text-center">
+          <div class="flex flex-col items-center gap-2">
+            <svg class="text-ok" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            <p class="text-sm text-muted m-0">Keine offenen Aufgaben.</p>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Right 1/3: Quick actions + system health -->
+  <div class="grid gap-5 content-start">
+
+    <!-- Quick actions -->
+    <div class="card mb-0">
+      <div class="card-header">
+        <h2 class="text-base font-semibold text-ink m-0">Schnellaktionen</h2>
+      </div>
+      <div class="p-3 grid gap-1">
+        {% if current_user.role in ["editor", "admin", "super_admin"] %}
+        <a href="/register/new" class="quick-tile">
+          <div class="quick-tile-icon" style="background:#EAF1EB;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4E6B57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+          </div>
+          <div>
+            <p class="text-sm font-medium text-ink m-0">Ausgang erfassen</p>
+            <p class="text-xs text-muted m-0">Neuen ausgehenden Vorgang registrieren</p>
+          </div>
+        </a>
+        {% endif %}
+        <a href="/review" class="quick-tile">
+          <div class="quick-tile-icon" style="background:#EAF3F8;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3B6E91" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          </div>
+          <div>
+            <p class="text-sm font-medium text-ink m-0">Zu prüfen</p>
+            <p class="text-xs text-muted m-0">Offene Vorgänge überblicken</p>
+          </div>
+        </a>
+        <a href="/register" class="quick-tile">
+          <div class="quick-tile-icon" style="background:#F6F7F5; border:1px solid #E7E5DF;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#667066" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          </div>
+          <div>
+            <p class="text-sm font-medium text-ink m-0">Register durchsuchen</p>
+            <p class="text-xs text-muted m-0">Korrespondenz filtern und öffnen</p>
+          </div>
+        </a>
+        {% if current_user.role in ["admin", "super_admin"] %}
+        <a href="/admin/import-monitor" class="quick-tile">
+          <div class="quick-tile-icon" style="background:#F6E7DE;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B86C3F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+          </div>
+          <div>
+            <p class="text-sm font-medium text-ink m-0">Import-Monitor</p>
+            <p class="text-xs text-muted m-0">Importläufe und Fehler einsehen</p>
+          </div>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- System health / quick links -->
+    <div class="card mb-0">
+      <div class="card-header">
+        <h2 class="text-base font-semibold text-ink m-0">Register</h2>
+      </div>
+      <div class="p-3 grid gap-1">
+        <a href="/register" class="quick-tile">
+          <div class="quick-tile-icon" style="background:#EAF1EB;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4E6B57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <div>
+            <p class="text-sm font-medium text-ink m-0">Korrespondenzregister</p>
+            <p class="text-xs text-muted m-0">{{ counts.total if counts.total is defined else '' }} Vorgänge im Archiv</p>
+          </div>
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

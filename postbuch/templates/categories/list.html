@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Kategorien</h1>
+    <p class="page-subtitle">Aktive Kategorien für die Korrespondenz.</p>
+  </div>
+</div>
+
+<div class="card mb-0">
+  {% if categories %}
+  <table class="w-full border-collapse text-sm">
+    <thead>
+      <tr class="border-b border-line">
+        <th class="table-th">Name</th>
+        <th class="table-th">Beschreibung</th>
+        <th class="table-th">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for category in categories %}
+      <tr class="table-row">
+        <td class="table-td font-medium text-ink">
+          <a href="/register?category_id={{ category.id }}" class="hover:text-brand">{{ category.name }}</a>
+        </td>
+        <td class="table-td text-ink2 text-xs">{{ category.description or "–" }}</td>
+        <td class="table-td">
+          {% if category.is_active %}
+          <span class="chip chip-aktiv">Aktiv</span>
+          {% else %}
+          <span class="chip chip-inaktiv">Inaktiv</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="card-body text-center py-12">
+    <svg class="mx-auto mb-3 text-muted" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" x2="7.01" y1="7" y2="7"/></svg>
+    <p class="text-sm font-medium text-ink m-0">Keine Kategorien vorhanden</p>
+    <p class="text-xs text-muted mt-1 mb-3 m-0">Kategorien strukturieren die Zuordnung eingehender und ausgehender Korrespondenz.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
