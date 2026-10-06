@@ -59,12 +59,16 @@ services:
   minio:
     # Local S3-compatible object storage, so document upload/OCR works with no
     # cloud account. Swap POSTBUCH_S3_* for a hosted provider in production.
-    image: minio/minio:latest
+    # MinIO no longer publishes images on Docker Hub; Chainguard packages the
+    # same server (with mc). Their free tier publishes only the latest tag.
+    image: cgr.dev/chainguard/minio:latest
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      # The healthcheck runs `mc ready local`; this image has no preset alias.
+      MC_HOST_local: http://${MINIO_ROOT_USER:-minioadmin}:${MINIO_ROOT_PASSWORD:-minioadmin}@localhost:9000
     ports:
       - "${POSTBUCH_MINIO_PORT:-9012}:9000"
       - "${POSTBUCH_MINIO_CONSOLE_PORT:-9013}:9001"
@@ -79,7 +83,8 @@ services:
   minio-init:
     # Creates the bucket, then exits. web/worker wait on it completing so the
     # first upload cannot race an absent bucket.
-    image: minio/mc:latest
+    # The server image also ships mc and a shell, which this step needs.
+    image: cgr.dev/chainguard/minio:latest
     depends_on:
       minio:
         condition: service_healthy

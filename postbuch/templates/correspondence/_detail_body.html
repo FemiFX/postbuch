@@ -139,7 +139,7 @@
             <label class="form-label">Ablageort</label>
             <input class="form-input" type="text" name="placement_location"
                    value="{{ item.placement_location or '' }}"
-                   placeholder="z. B. Maithys Fach">
+                   placeholder="z. B. Fach der Geschäftsführung">
           </div>
           <div>
             <label class="form-label">Weitergegeben an</label>
@@ -173,7 +173,7 @@
               <label class="form-label">Benachrichtigt an</label>
               <input class="form-input" type="text" name="notified_party"
                      value="{{ item.notified_party or '' }}"
-                     placeholder="z. B. Angela">
+                     placeholder="z. B. Buchhaltung">
             </div>
           </div>
         </div>
@@ -184,7 +184,7 @@
         <div class="card-header"><h2 class="text-sm font-semibold text-ink m-0">Bearbeitungsvermerk</h2></div>
         <div class="card-body">
           <textarea class="form-textarea" name="processing_note" style="min-height:90px;"
-                    placeholder="z. B. Original im Fach des Jugendprojekts abgelegt, Angela per E-Mail informiert.">{{ item.processing_note or '' }}</textarea>
+                    placeholder="z. B. Original im Fach des Jugendprojekts abgelegt, Ansprechperson per E-Mail informiert.">{{ item.processing_note or '' }}</textarea>
         </div>
       </div>
 
